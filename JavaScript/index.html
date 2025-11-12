@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+  </head>
+  <body>
+    <!-- <style>
+      body * {
+        margin: 10px;
+        border: 1px solid blue;
+      }
+    </style>
+
+    <form>
+      FORM
+      <div>
+        DIV
+        <p>P</p>
+      </div>
+    </form>
+
+    <script>
+      for (let elem of document.querySelectorAll("*")) {
+        elem.addEventListener(
+          "click",
+          (e) => alert(`Capturing: ${elem.tagName}`),
+          true
+        );
+        elem.addEventListener("click", (e) =>
+          alert(`Bubbling: ${elem.tagName}`)
+        );
+      }
+    </script> -->
+
+    <div id="box" style="width: 200px; height: 100px; overflow: auto">
+      <div style="height: 300px; width: 300px; background: lightblue"></div>
+    </div>
+
+    <script>
+      box.addEventListener("scroll", () => {
+        console.log(box.scrollTop, box.scrollLeft); // logs how much user scrolled
+      });
+    </script>
+  </body>
+</html>
+
+<!-- <!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+  </head>
+  <body style="background-color: gray">
+    <button id="orange">orange</button>
+    <button id="green">green</button> -->
+
+<!-- <script>
+        const handlecolor=(color)=>{
+            return function(){
+                document.body.style.backgroundColor=`${color}`
+            }
+        }
+        document.getElementById("orange").onclick=handlecolor("orange");
+        document.getElementById("green").onclick=handlecolor("green");
+        
+    </script> -->
+<!-- <script src="./index.js"></script> -->
+
+<!-- <div id="myDiv">Hello</div>
+    <script>
+      const div = document.getElementById("myDiv");
+      console.log(div.nodeType); // 1 (ELEMENT_NODE)
+
+      const textNode = div.firstChild;
+      console.log(textNode.nodeType); // 3 (TEXT_NODE)
+    </script> -->
+
+<!-- <div id="box" style="width: 200px; height: 150px; padding: 10px; border: 5px solid black; overflow: auto;">
+    <div style="width: 400px; height: 300px;">Content inside scrollable box</div> -->
+<!-- <div id="example">
+  ...Text...
+</div>
+<style>
+  #example {
+    width: 300px;
+    height: 200px;
+    border: 25px solid #E8C48F;
+    padding: 20px;
+    overflow: auto;
+  }
+</style> -->
+<!-- </div>
+ <div id="grandparent">
+
+  <div id="parent">
+    <div id="child"></div>
+  </div>
+ </div>
+  <script >
+    const result = indexedDB.open("first")
+
+    result.onupgradeneeded =e =>{
+      alert("Upgrade called")
+    }
+
+    result.onsuccess=e =>{
+      alert("success")
+    }
+
+    result.onerror =e => {
+      alert("error");
+    }
+  </script>
+  </body>
+</html> -->
+
+<!-- <!DOCTYPE html>
+<html>
+<head>
+  <style>
+    #grandparent {
+      padding: 40px;
+      background: lightcoral;
+    }
+
+    #parent {
+      padding: 40px;
+      background: lightgreen;
+    }
+
+    #child {
+      padding: 40px;
+      background: lightskyblue;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div id="grandparent">
+    Grandparent
+    <div id="parent">
+      Parent
+      <div id="child">Child</div>
+    </div>
+  </div>
+
+  <script >
+    document.getElementById("grandparent").addEventListener("click", () => {
+  console.log("Grandparent clicked");
+},true);
+
+document.getElementById("parent").addEventListener("click", () => {
+  console.log("Parent clicked");
+},true);
+
+document.getElementById("child").addEventListener("click", () => {
+  console.log("Child clicked");
+});
+
+  </script>
+
+</body>
+</html> -->

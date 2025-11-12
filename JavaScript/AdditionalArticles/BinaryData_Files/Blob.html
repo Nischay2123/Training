@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+  </head>
+  <body>
+    <!-- download attribute forces the browser to download instead of navigating -->
+    <!-- <a download="hello.txt" href="#" id="link">Download</a>
+
+    <script>
+    //   let blob = new Blob(["Hello, world!"], { type: "text/plain" });
+
+    //   link.href = URL.createObjectURL(blob);
+
+    fetch("https://picsum.photos/400/400")
+    .then(res =>  res.blob())
+    .then(blob=>handler(blob))
+
+    function handler(blob){
+        const url = URL.createObjectURL(blob);
+        const img = new Image();
+        img.src= url;
+        img.onload=(e)=>{
+            e.preventDefault()
+            document.body.appendChild(img);
+        }
+    }
+    </script> -->
+
+    <input type="file" onchange="readFile(this)" />
+
+    <script>
+      function readFile(input) {
+        let file = input.files[0];
+
+        let reader = new FileReader();
+
+        reader.readAsText(file);
+
+        reader.onload = function () {
+          console.log(reader.result);
+        };
+
+        reader.onerror = function () {
+          console.log(reader.error);
+        };
+      }
+    </script>
+  </body>
+</html>
