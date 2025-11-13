@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+    <style>
+  .draggable {
+    width: 100px;
+    height: 100px;
+    background: lightblue;
+    position: absolute;
+    cursor: grab;
+  }
+</style>
+
+<div id="ball" class="draggable"></div>
+
+<script>
+  const ball = document.getElementById('ball');
+
+  ball.onmousedown = function (event) {
+
+    let shiftX = event.clientX - ball.getBoundingClientRect().left;
+    let shiftY = event.clientY - ball.getBoundingClientRect().top;
+
+    ball.style.position = 'absolute';
+    ball.style.zIndex = 1000;
+    document.body.append(ball);
+
+    moveAt(event.pageX, event.pageY);
+
+    function moveAt(pageX, pageY) {
+      ball.style.left = pageX - shiftX + 'px';
+      ball.style.top = pageY - shiftY + 'px';
+    }
+
+    function onMouseMove(event) {
+      moveAt(event.pageX, event.pageY);
+    }
+
+    document.addEventListener('mousemove', onMouseMove);
+
+    ball.onmouseup = function () {
+      document.removeEventListener('mousemove', onMouseMove);
+      ball.onmouseup = null;
+    };
+  };
+
+  ball.ondragstart = () => false; // prevent default browser drag
+</script>
+
+</body>
+</html>

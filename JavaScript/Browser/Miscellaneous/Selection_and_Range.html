@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+  </head>
+  <body>
+    <p id="content">
+      This is the first sentence.
+      <span id="target">This text is inside a span.</span>
+      This is the third sentence.
+    </p>
+    <script>
+      // 1. Get the container element and its text node
+      const content = document.getElementById("content");
+      // Get the first text node child: "This is the first sentence."
+      const textNode = content.childNodes[0];
+
+      // 2. Create a new Range object
+      const range = document.createRange();
+
+      // 3. Define the start and end positions:
+      // Start: 5th character of the textNode (" is the first...")
+      range.setStart(textNode, 5);
+      // End: 15th character of the textNode ("... the first s")
+      range.setEnd(textNode, 15);
+
+      // 4. Apply the Range to the user's Selection
+      window.getSelection().removeAllRanges(); // Clear previous selection
+      window.getSelection().addRange(range); // Apply the new range
+
+      console.log("Range collapsed:", range.collapsed); // Output: false
+      console.log("Start Container:", range.startContainer.textContent.trim());
+      // Output: "This is the first sentence."
+    </script>
+  </body>
+</html>

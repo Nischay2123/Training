@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head><title>Read Text File</title></head>
+<body>
+    <input type="file" id="textFileInput" accept=".txt,.json">
+    <pre id="fileContent"></pre>
+
+    <script>
+        const input = document.getElementById('textFileInput');
+        const contentDisplay = document.getElementById('fileContent');
+
+        input.addEventListener('change', function() {
+            const file = this.files[0]; // Get the first File object
+
+            if (file) {
+                const reader = new FileReader();
+
+                // Set up the success handler
+                reader.onload = function(e) {
+                    // e.target is the reader itself, so e.target.result is the data
+                    contentDisplay.textContent = e.target.result;
+                    console.log("File loaded successfully.");
+                };
+
+                // Set up the error handler
+                reader.onerror = function() {
+                    contentDisplay.textContent = 'Error reading file!';
+                    console.error(reader.error);
+                };
+                
+                // Start reading the file as a string (UTF-8 by default)
+                reader.readAsText(file);
+            }
+        });
+    </script>
+</body>
+</html>
