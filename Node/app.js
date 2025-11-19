@@ -16,6 +16,10 @@
 // console.log(names.john);
 // console.log(names.peter);
 
-require('./importWholeFile');
+// require('./importWholeFile');
 
 // sum() error
+
+
+
+

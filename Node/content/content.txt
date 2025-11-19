@@ -1,0 +1,1 @@
+This is awesome here is the result : Hello from the content file , hello from the second file and $ second
