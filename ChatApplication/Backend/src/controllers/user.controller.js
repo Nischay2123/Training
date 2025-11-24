@@ -1,62 +1,68 @@
 import {ApiError} from "../utils/ApiError.js"
 import {ApiResoponse} from "../utils/ApiResponse.js"
 import Users from "../models/User.model.js"
+import Conversations from "../models/Conversation.model.js"
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import {asyncHandler} from "../utils/asyncHandler.js"
 import { generateAccessAndRefernceToken } from "../utils/token.js";
 import jwt from "jsonwebtoken";
 
 
-export const registerUser = asyncHandler(async(req,res)=>{
-    const{firstName,lastName,email,password}= req.body;
+export const registerUser = asyncHandler(async(req, res) => {
+    const { firstName, lastName, userName, email, password } = req.body;
 
-    if ([firstName, lastName, email, password].some(field => !field || field.trim() === "")) {
+    if ([firstName, lastName, userName, email, password].some(field => !field || field.trim() === "")) {
         throw new ApiError(400, "All fields are required");
     }
 
     const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-
     if (!emailRegex.test(email)) {
         throw new ApiError(400, "Invalid email format");
     }
 
+    const existingEmail = await Users.findOne({ email });
+    if (existingEmail) {
+        throw new ApiError(409, "User with this email already exists");
+    }
+
+    const existingUsername = await Users.findOne({ userName });
+    if (existingUsername) {
+        throw new ApiError(409, "User with this username already exists");
+    }
+
     
+    let photoUrl = null; 
 
-    if(existedUser) throw new ApiError(409,"User with this email is already exist");
-
-    console.log(`req file:`, Object.toString(req));
-    // let photoLocalPath = req.files ? Object.keys(req.files).length > 0 && req.files?.photo.length > 0 ? req.files?.photo[0].path : "" :""
-
-    const photoUploaded = await uploadOnCloudinary(req.file.buffer, "user_uploads");
-    console.log("cloundinary:", photoUploaded);
-    
+    if (req.file && req.file.buffer) {
+        photoUrl = await uploadOnCloudinary(req.file.buffer, "user_uploads");
+    }
 
     const user = await Users.create({
         firstName,
         lastName,
+        userName,
         email,
         password,
-        photo:photoUploaded ?? "",
+        photo: photoUrl 
     });
 
-    if (!user) {
-        throw new ApiError(500,"Something went wrong while registering the user")
+    const createdUser = await Users.findById(user._id).select("-password -refreshToken");
+
+    if (!createdUser) {
+        throw new ApiError(500, "Something went wrong while registering the user");
     }
 
-    user.password="";
-    user.refreshToken="";
-
     return res.status(201).json(
-        new ApiResoponse(200,user,"User Registered Successfully")
-    )
-
-})
+        new ApiResoponse(200, createdUser, "User Registered Successfully")
+    );
+});
 
 export const loginUser = asyncHandler(async(req,res)=>{
     const {email,password} = req.body;
 
     if(!email || !password) throw new ApiError(400,"email or password is required")
-
+    console.log(email, password);
+    
     const user = await Users.findOne({email});
     // console.log(user);
     
@@ -134,3 +140,59 @@ export const refreshAccessToken = asyncHandler(async(req,res)=>{
         new ApiResoponse(200,"Tokens are refreshed")
     )
 })
+
+export const getUser = asyncHandler(async(req,res)=>{
+    const {userName} = req.query;
+
+    const user = await Users.findOne({userName}).select("-password -refreshToken");
+
+    if (!user) {
+        throw new ApiError(401,"User not exist");
+    }
+
+    res.status(200).json(
+        new ApiResoponse(200,user,"user found")
+    )
+})
+
+
+export const getAvailableUsersForGroup = asyncHandler(async (req, res) => {
+    const currentUserId = req.user._id;
+    const { groupId } = req.params;
+
+    console.log(groupId);
+    
+
+    const groupChat = await Conversations.findById(groupId);
+    if (!groupChat) {
+        throw new ApiError(404, "Group conversation not found");
+    }
+    const existingMemberIds = groupChat.participants.map((p) => p.userId.toString());
+    
+
+    const chats = await Conversations.find({
+        "participants.userId": currentUserId,
+        "participants": { $size: 2 } 
+    }).select("participants");
+
+    const availableUsers = chats
+        .map((chat) => {
+            const friend = chat.participants.find(
+                (p) => p.userId.toString() !== currentUserId.toString()
+            );
+            
+            return friend ? {
+                _id: friend.userId,
+                name: friend.name,
+                photo: friend.photo
+            } : null;
+        })
+        .filter((friend) => {
+            if (!friend) return false;
+            return !existingMemberIds.includes(friend._id.toString());
+        });
+
+    return res.status(200).json(
+        new ApiResoponse(200, availableUsers, "Available users retrieved successfully")
+    );
+});

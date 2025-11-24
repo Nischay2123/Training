@@ -3,7 +3,9 @@ import {
     registerUser,
     loginUser,
     logoutUser,
-    refreshAccessToken
+    refreshAccessToken,
+    getUser,
+    getAvailableUsersForGroup
 } from "../controllers/user.controller.js";
 import { uploadSingleFile } from "../middlerwares/multer.middleware.js";
 import { verifyJwt } from "../middlerwares/auth.middleware.js";
@@ -20,6 +22,10 @@ router.route("/login").post(loginUser);
 router.route("/logout").post(verifyJwt,logoutUser)
 
 router.route("/refresh-token").post(refreshAccessToken)
+
+router.route("/").get(verifyJwt,getUser)
+
+router.route("/:groupId").get(verifyJwt,getAvailableUsersForGroup)
 
 
 export default router;

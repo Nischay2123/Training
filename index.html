@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Socket.io Chat Test</title>
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  <style>
+    body { font-family: Arial; margin: 20px; }
+    #chat { border: 1px solid #ccc; padding: 10px; height: 300px; overflow-y: scroll; }
+    .message { margin: 5px 0; }
+    .mine { color: blue; }
+    .other { color: green; }
+  </style>
+</head>
+<body>
+
+<h2>Socket.io Chat Test</h2>
+
+
+
+<div>
+  <label>User token: <input id="token" value=""></label>
+  <label>User ID: <input id="userId" value=""></label>
+  <label>Name: <input id="userName" value=""></label>
+  <button id="connectBtn">Connect</button>
+</div>
+
+<div>
+  <label>Conversation ID: <input id="conversationId" value=""></label>
+  <button id="joinBtn">Join Conversation</button>
+</div>
+
+<div id="chat"></div>
+
+<input id="messageInput" placeholder="Type a message">
+<button id="sendBtn">Send</button>
+
+<script>
+  let socket;
+  let userId, userName, conversationId;
+
+  const chatDiv = document.getElementById("chat");
+  const messageInput = document.getElementById("messageInput");
+
+  document.getElementById("connectBtn").onclick = () => {
+    userId = document.getElementById("userId").value;
+    userName = document.getElementById("userName").value; 
+
+    // 1️⃣ Set JWT token in cookie (simulate login)
+    const jwtToken = document.getElementById("token").value;
+    document.cookie = `accessToken=${jwtToken}; path=/`;
+
+    // 2️⃣ Connect to backend Socket.io server
+    socket = io("http://localhost:8000", {
+      withCredentials: true // important so cookies are sent
+    });
+
+    // fake authentication object for client-side reference
+    socket.user = { _id: userId, userName: userName, photo: "" };
+    console.log(socket.user);
+    
+
+    socket.on("connect_error", (err) => {
+        console.error("Connect Error:", err.message, err);
+    });
+
+    socket.on("connect_failed", (err) => {
+        console.error("Connect Failed:", err);
+    });
+
+    socket.on("disconnect", (reason) => {
+        console.log("Disconnected:", reason);
+    });
+
+
+    socket.on("connect", () => {
+      appendMessage("System", "Connected as " + userName);
+    });
+
+    // New message received
+    socket.on("NEW_MESSAGE", ({ message }) => {
+      const cls = message.sender._id === userId ? "mine" : "other";
+      appendMessage(message.sender.name, message.text, cls);
+      console.log(message);
+      
+    });
+
+    // Message confirmed by DB
+    socket.on("MESSAGE_CONFIRMED", ({ tempId, savedMessage }) => {
+      console.log("Message confirmed:", tempId, savedMessage);
+    });
+
+    // Typing events
+    socket.on("TYPING_START", ({ conversationId }) => {
+      console.log("Someone is typing...");
+    });
+    socket.on("TYPING_STOP", ({ conversationId }) => {
+      console.log("Typing stopped");
+    });
+  };
+
+  document.getElementById("joinBtn").onclick = () => {
+    conversationId = document.getElementById("conversationId").value;
+    socket.emit("JOIN_CONVERSATION", { conversationId });
+    appendMessage("System", "Joined conversation " + conversationId);
+  };
+
+  document.getElementById("sendBtn").onclick = () => {
+    const text = messageInput.value.trim();
+    if (!text) return;
+
+    const tempId = crypto.randomUUID();
+    socket.emit("SEND_MESSAGE", {
+      conversationId,
+      text,
+      members: ["6920affb8ad3a69d3252de28","6920b097a5cb2236e6faf29f"], // for testing
+      tempId
+    });
+
+    appendMessage(userName, text, "mine");
+    messageInput.value = "";
+    
+  };
+
+  function appendMessage(sender, text, cls="other") {
+    const div = document.createElement("div");
+    div.className = "message " + cls;
+    div.textContent = `${sender}: ${text}`;
+    chatDiv.appendChild(div);
+    chatDiv.scrollTop = chatDiv.scrollHeight;
+  }
+</script>
+
+</body>
+</html>

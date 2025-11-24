@@ -4,6 +4,7 @@ const conversationSchema = new mongoose.Schema(
   {
     participants: [
       {
+        _id:false,
         userId: {
           type: mongoose.Schema.Types.ObjectId,
           ref: "User",
@@ -16,19 +17,26 @@ const conversationSchema = new mongoose.Schema(
         name: {
           type: String, 
           default: null,
+          required:true
         },
       },
     ],
-    Name: {
+    admin:{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default:null
+    },
+    name: {
       type: String,
       trim: true,
-      default: null,
+      default: "One-to-One",
     }
   },
   {
-    timestamps: { createdAt: true },
+    timestamps: true 
   }
 );
 
 
-export default Conversations = mongoose.model("Conversation", conversationSchema);
+const Conversations = mongoose.model("Conversation", conversationSchema);
+export default Conversations;

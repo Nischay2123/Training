@@ -15,6 +15,11 @@ const userSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    userName:{
+      type:String,
+      required:true,
+      unique:true
+    },
     email: {
       type: String,
       required: true,
@@ -56,6 +61,7 @@ userSchema.methods.generateAccessToken = function(){
     {
       _id: this._id,
       email:this.email,
+      userName:this.userName,
       fullName:`${this.firstName} ${this.lastName}`
     },
     process.env.ACCESS_TOKEN_SECRET,

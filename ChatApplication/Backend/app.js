@@ -2,13 +2,35 @@ import express from "express";
 import env from "dotenv"
 import connectDB from "./src/utils/db.js";
 import Users from "./src/routes/user.routes.js"
+import Conversations from "./src/routes/conversation.routes.js"
 import cors from 'cors';
 import cookieParser from 'cookie-parser'
 import morgan from "morgan"
-
-const app = express();
+import { createServer } from 'node:http';
+import { Server } from "socket.io"
+import { socketAuthenticator } from "./src/middlerwares/auth.middleware.js";
+import {v4 as uuid} from 'uuid';
+import Messages from "./src/models/Message.model.js";
+import { ApiError } from "./src/utils/ApiError.js";
 
 const port = process.env.PORT ?? 8000
+const userSocketIDs = new Map()
+const onlineUsers = new Set();
+const corsOptions = {
+    origin: [
+      "http://localhost:5500",
+      "http://localhost:4173",
+      process.env.CLIENT_URL,
+    ],
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    credentials: true,
+};
+
+const app = express();
+const server = createServer(app);
+const io = new Server(server , {
+    cors: corsOptions
+} )
 
 env.config()
 connectDB(process.env.MONGOD_URI)
@@ -18,6 +40,10 @@ app.use(cors({
     origin:"*",
     credentials:true
 }));
+
+app.set("io", io);
+
+
 app.use(express.json());
 app.use(express.urlencoded({extended:true,limit:"16kb"}));
 app.use(cookieParser());
@@ -25,10 +51,132 @@ app.use(morgan("tiny"))
 
 
 app.use("/api/v1/users",Users);
+app.use("/api/v1/conversation",Conversations);
 
 app.get("/",(req,res)=>{
     res.send("Hello from the Server")
 })
 
+// have to read about it
+io.use(async(socket, next) => {
+    console.log("New socket trying to connect. Headers:", socket.request.headers);
+    await socketAuthenticator(socket, next);
+});
 
-app.listen(port,()=> console.log(`Server is running on: http://localhost:${port}`));
+
+io.on("connection", (socket) => {
+    const user = socket.user;
+    const userId = user._id.toString();
+
+    userSocketIDs.set(userId, socket.id);
+    onlineUsers.add(userId);
+
+    const getSocketIds = (members) =>
+        members
+            .map((id) => userSocketIDs.get(id.toString()))
+            .filter((sid) => sid);
+
+    socket.on("JOIN_CONVERSATION", ({ conversationId }) => {
+        socket.join(conversationId);
+    });
+
+    socket.on("SEND_MESSAGE", async ({ conversationId, text, members, tempId }, callback) => {
+        try {
+            if (!tempId) tempId = uuid();
+            const explicitTime = new Date();
+
+            const messageRealTime = {
+                _id: tempId,
+                conversationId,
+                text,
+                sender: {
+                    _id: userId,
+                    name: user.userName,
+                    photo: user.photo,
+                },
+                createdAt: explicitTime.toISOString(),
+                status: "pending",
+            };
+
+            const socketIds = getSocketIds(members);
+            io.to(socketIds).emit("NEW_MESSAGE", {
+                conversationId,
+                message: messageRealTime,
+            });
+
+            const savedMessage = await Messages.create({
+                conversationId,
+                text,
+                sender: userId,
+                createdAt: explicitTime,
+                updatedAt: explicitTime,
+            });
+
+            io.to(socketIds).emit("MESSAGE_CONFIRMED", {
+                tempId,
+                savedMessage: {
+                    _id: savedMessage._id,
+                    conversationId: savedMessage.conversationId,
+                    text: savedMessage.text,
+                    sender: {
+                        _id: userId,
+                        name: user.userName,
+                        photo: user.photo,
+                    },
+                    createdAt: savedMessage.createdAt,
+                    status: "sent",
+                },
+            });
+
+            io.to(socketIds).emit("NEW_MESSAGE_ALERT", conversationId);
+
+            if (callback) callback({ success: true });
+        } catch (error) {
+            socket.emit("ERROR", {
+                type: "SEND_MESSAGE_FAILED",
+                message: error.message || "Failed to send message",
+                tempId,
+            });
+
+            if (callback) callback({ success: false, error: error.message });
+        }
+    });
+
+    socket.on("TYPING_START", ({ conversationId, members }) => {
+        const socketIds = getSocketIds(members);
+        socket.to(socketIds).emit("TYPING_START", { conversationId });
+    });
+
+    socket.on("TYPING_STOP", ({ conversationId, members }) => {
+        const socketIds = getSocketIds(members);
+        socket.to(socketIds).emit("TYPING_STOP", { conversationId });
+    });
+
+    socket.on("MESSAGE_SEEN", async ({ conversationId, messageId }) => {
+        await Messages.findByIdAndUpdate(messageId, {
+            $push: {
+                seen: {
+                    userId,
+                    name: user.userName,
+                    seenAt: new Date(),
+                },
+            },
+        });
+
+        io.to(conversationId).emit("MESSAGE_SEEN", {
+            messageId,
+            userId,
+        });
+    });
+
+    socket.on("disconnect", () => {
+        userSocketIDs.delete(userId);
+        onlineUsers.delete(userId);
+        socket.broadcast.emit("ONLINE_USERS", [...onlineUsers]);
+    });
+});
+
+
+
+
+server.listen(port,()=> console.log(`Server is running on: http://localhost:${port}`));
