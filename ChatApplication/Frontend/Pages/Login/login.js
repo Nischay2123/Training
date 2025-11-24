@@ -11,9 +11,12 @@ loginForm.addEventListener('submit', async (event) => {
     const apiEndpoint = "http://localhost:8000/api/v1/users/login";
 
     try {
-        const response = await axios.post(apiEndpoint, { email, password });
-        console.log("Login successful:", response.data);
-        alert("Login successful!");
+        const response = await axios.post(apiEndpoint, { email, password },{
+            withCredentials: true
+        });
+        console.log("Login successful:", response.data.data);
+        window.localStorage.setItem("user",response.data.data);
+        window.location.href = 'http://localhost:5500/ChatApplication/Frontend/Pages/Chat/chat.html';
     } catch (error) {
         console.error("Login failed:", error.response ? error.response.data : error.message);
         alert("Login failed");

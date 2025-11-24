@@ -37,7 +37,7 @@
             <div class="chat-items-container">
                 <!-- Single Chat Item -->
                 <div class="chat-item active">
-                    <div class="avatar"><img src="user-3296.png" alt="photo"></div>
+                    <div class="avatar"><img src="default-avtar.png" alt="photo"></div>
                     <div class="chat-info">
                         <span class="name">User Name</span>
                         <span class="preview">Last message...</span>
@@ -45,11 +45,12 @@
                 </div>
                 <!-- Repeat chat items as needed -->
                  <div class="chat-item">
-                    <div class="avatar"><img src="user-3296.png" alt=""></div>
+                    <div class="avatar"><img src="default-avtar.png" alt=""></div>
                     <div class="chat-info">
                         <span class="name">Another User</span>
                         <span class="preview">See you later!</span>
                     </div>
+                    <div class="chat-notify"><span class="c-notify"></span></div>
                 </div>
             </div>
         </aside>
@@ -58,58 +59,42 @@
         <main class="column-active-chat">
             <header class="chat-header">
                 <div class="user-status">
-                    <span class="status-image"><img src="user-3296.png" alt=""></span>
+                    <span class="status-image"><img src="default-avtar.png" alt=""></span>
                     <span class="status-name">Current Contact</span>
                 </div>
             </header>
 
             <div class="messages-area">
-                <!-- Incoming Message -->
-                <div class="message-wrapper incoming">
-                    <div class="bubble">Hello there!</div>
-                    <span class="timestamp">10:00 AM</span>
-                </div>
-
-                <!-- Outgoing Message -->
-                <div class="message-wrapper outgoing">
-                    <div class="bubble">Hi! How are you?</div>
-                    <span class="timestamp">10:01 AM</span>
-                </div>
+                <p>No messages available</p>
             </div>
 
             <footer class="chat-input-area">
-                <input type="text" class="message-input" placeholder="Type a message...">
+                <input type="text" class="message-input" placeholder="Type a message..." value="">
                 <button class="send-btn">Send</button>
             </footer>
         </main>
 
         <!-- COLUMN 4: User Profile Details -->
-        <aside class="column-profile">
+        <aside class="column-profile" style="display: none;">
             <div class="profile-header">
-                <div class="large-avatar"></div>
-                <h3 class="profile-name">Profile Name</h3>
-                <p class="profile-role">Job Title / Status</p>
+                <div class="large-avatar"><img src="default-avtar.png" alt=""></div>
+                <h2 class="profile-name">Profile Name</h2>
             </div>
 
             <div class="profile-sections">
                 <section class="media-section">
-                    <h4>Shared Media</h4>
                     <div class="media-grid">
-                        <div class="media-item">Img</div>
-                        <div class="media-item">Img</div>
-                        <div class="media-item">Img</div>
+                        <div class="media-item">Full Name</div>
+                        <div class="media-item">email</div>
                     </div>
-                </section>
-
-                <section class="options-section">
-                    <button class="option-btn">Notifications</button>
-                    <button class="option-btn">Privacy</button>
-                    <button class="option-btn danger">Block User</button>
                 </section>
             </div>
         </aside>
-
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+
+    <script type="module" src="js/main.js"></script>
 </body>
 </html>
