@@ -1,6 +1,7 @@
 import {asyncHandler} from "../utils/asyncHandler.js"
 import Conversations from "../models/Conversation.model.js"
 import Users from "../models/User.model.js"
+import Messages from "../models/Message.model.js"
 import {ApiResoponse }from "../utils/ApiResponse.js"
 import {ApiError} from "../utils/ApiError.js"
 
@@ -48,25 +49,40 @@ export const getChat = asyncHandler(async(req,res)=>{
     return res.status(201).json(new ApiResoponse(201,newConverstion,"Conversation Created"))
 })
 
-export const getAllConversations = async (req, res) => {
-  
-    const currentUserId = req.user._id; 
+
+export const getAllConversations = asyncHandler(async (req, res) => {
+    const currentUserId = req.user._id;
 
     const conversations = await Conversations.find({
-      "participants.userId": currentUserId
+        "participants.userId": currentUserId
     })
-    .sort({ updatedAt: -1 }); 
+    .populate("participants.userId", "firstName lastName userName photo email") 
+    .populate("lastMessage.sender", "userName photo") 
+    .sort({ updatedAt: -1 });
 
-    if (conversations.length<1) {
-        return res.status(200).json(
-            new ApiResoponse(200,"No converstaions found")
-        )
+    if (!conversations || conversations.length === 0) {
+        return res.status(200).json(new ApiResoponse(200, [], "No conversations found"));
     }
 
-    return res.status(200).json(
-        new ApiResoponse( 200,conversations, "Conversations retrieved successfully")
+    const conversationsWithCount = await Promise.all(
+        conversations.map(async (convo) => {
+            const unreadCount = await Messages.countDocuments({
+                conversationId: convo._id,
+                sender: { $ne: currentUserId }, 
+                "seen.userId": { $ne: currentUserId }
+            });
+
+            return {
+                ...convo.toObject(),
+                unreadCount: unreadCount
+            };
+        })
     );
-};
+
+    return res.status(200).json(
+        new ApiResoponse(200, conversationsWithCount, "Conversations retrieved successfully")
+    );
+});
 
 export const createGroup = asyncHandler(async (req, res) => {
     const { name, participants } = req.body; 

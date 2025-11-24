@@ -74,7 +74,7 @@ export const loginUser = asyncHandler(async(req,res)=>{
     console.log("password", isPasswordValid);
     
 
-    if(!isPasswordValid) throw ApiError(401,"Invalid user Credentials") 
+    if(!isPasswordValid) throw new ApiError(401,"Invalid user Credentials") 
     // console.log(user._id);
     
     const {accessToken,refreshToken}=await generateAccessAndRefernceToken(user._id);
@@ -84,10 +84,10 @@ export const loginUser = asyncHandler(async(req,res)=>{
 
     const options = {
         httpOnly: true,
-        secure: true
+        secure: false
     }
 
-    return res.status(200).cookie("accessToken",accessToken,options).cookie("refreshToken",refreshToken,options).json(new ApiResoponse(200,"User loggedin successfully"))
+    return res.status(200).cookie("accessToken",accessToken,options).cookie("refreshToken",refreshToken,options).json(new ApiResoponse(200,{"_id":user._id,"photo":user.photo,"userName":user.userName,"fullName":`${user.firstName} ${user.lastName}`},"User loggedin successfully"))
 })
 
 
@@ -109,14 +109,14 @@ export const logoutUser = asyncHandler(async(req,res)=>{
     
     const options = {
         httpOnly: true,
-        secure: true
+        secure: false
     }
     return res.status(200).clearCookie("accessToken",options).clearCookie("refreshToken",options).json(new ApiResoponse(200,{},"user logged out"))
 })
 
 export const refreshAccessToken = asyncHandler(async(req,res)=>{
-    const incomingRefreshToken = req.cookie.refreshToken;
-    if (incomingRefreshToken) throw new ApiError(401,"Unauthorized Request")
+    const incomingRefreshToken = req.cookies.refreshToken;
+    if (!incomingRefreshToken) throw new ApiError(401,"Unauthorized Request")
     
     const decodedToken =  jwt.verify(incomingRefreshToken,process.env.REFRESH_TOKEN_SECRET);
 
@@ -167,7 +167,7 @@ export const getAvailableUsersForGroup = asyncHandler(async (req, res) => {
     if (!groupChat) {
         throw new ApiError(404, "Group conversation not found");
     }
-    const existingMemberIds = groupChat.participants.map((p) => p.userId.toString());
+    const existingMemberIds = groupChat.participants.map((p) => p.userId);
     
 
     const chats = await Conversations.find({
@@ -178,7 +178,7 @@ export const getAvailableUsersForGroup = asyncHandler(async (req, res) => {
     const availableUsers = chats
         .map((chat) => {
             const friend = chat.participants.find(
-                (p) => p.userId.toString() !== currentUserId.toString()
+                (p) => p.userId !== currentUserId
             );
             
             return friend ? {
@@ -189,7 +189,7 @@ export const getAvailableUsersForGroup = asyncHandler(async (req, res) => {
         })
         .filter((friend) => {
             if (!friend) return false;
-            return !existingMemberIds.includes(friend._id.toString());
+            return !existingMemberIds.includes(friend._id);
         });
 
     return res.status(200).json(

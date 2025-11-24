@@ -30,6 +30,15 @@ const conversationSchema = new mongoose.Schema(
       type: String,
       trim: true,
       default: "One-to-One",
+    },
+    lastMessage:{
+        text: String,
+        sender: { 
+          type: mongoose.Schema.Types.ObjectId, 
+          ref: "User" 
+        },
+        createdAt: Date,
+        updatedAt: Date
     }
   },
   {

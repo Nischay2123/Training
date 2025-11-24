@@ -7,6 +7,8 @@ import cookieParser from "cookie-parser";
 export const verifyJwt = asyncHandler(async(req,res,next)=>{
     try {
         const token = req.cookies?.accessToken ;
+        console.log(token);
+        
         if(!token) throw new ApiError( 401,"Unauthorized Request or Access Token expired")
     
         const decodeToken = jwt.verify(token,process.env.ACCESS_TOKEN_SECRET);
@@ -22,31 +24,6 @@ export const verifyJwt = asyncHandler(async(req,res,next)=>{
         throw new ApiError(401,error?.message|| "Invalid Access Token")
     }
 })
-
-
-// export const socketAuthenticator = async (err, socket, next) => {
-//       try {
-//         if (err) throw new ApiError(401,`Socket Error Happen ${err.message}`);
-  
-//       const token = req.cookies?.accessToken ;
-  
-//       if (!authToken)
-//         return new ApiError(401,"Please login to access this route");
-  
-//       const decodedData = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
-  
-//       const user = await Users.findById(decodedData._id);
-  
-//       if (!user)
-//         return new Error("Please login to access this route: ",err.message );
-  
-//       socket.user = user;
-  
-//       return next();
-//       } catch (error) {
-//         return new Error("Please login to access this route: ",error.message );
-//       }
-// };
 
 export const socketAuthenticator = async (socket, next) => {
   try {

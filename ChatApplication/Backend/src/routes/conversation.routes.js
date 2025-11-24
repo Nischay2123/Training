@@ -5,7 +5,7 @@ import { verifyGroupAdmin } from "../middlerwares/admin.middleware.js";
 
 const router = express.Router();
 
-router.route("/").get(verifyJwt,getGroupByName) 
+router.route("/group").get(verifyJwt,getGroupByName) 
 
 router.route("/").post(verifyJwt,getChat).get(verifyJwt,getAllConversations)
 

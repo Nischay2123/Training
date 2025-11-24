@@ -2,7 +2,8 @@ import express from "express";
 import env from "dotenv"
 import connectDB from "./src/utils/db.js";
 import Users from "./src/routes/user.routes.js"
-import Conversations from "./src/routes/conversation.routes.js"
+import Conversation from "./src/routes/conversation.routes.js"
+import Message from "./src/routes/message.route.js"
 import cors from 'cors';
 import cookieParser from 'cookie-parser'
 import morgan from "morgan"
@@ -11,7 +12,7 @@ import { Server } from "socket.io"
 import { socketAuthenticator } from "./src/middlerwares/auth.middleware.js";
 import {v4 as uuid} from 'uuid';
 import Messages from "./src/models/Message.model.js";
-import { ApiError } from "./src/utils/ApiError.js";
+import Conversations from "./src/models/Conversation.model.js";
 
 const port = process.env.PORT ?? 8000
 const userSocketIDs = new Map()
@@ -36,10 +37,7 @@ env.config()
 connectDB(process.env.MONGOD_URI)
 
 
-app.use(cors({
-    origin:"*",
-    credentials:true
-}));
+app.use(cors(corsOptions));
 
 app.set("io", io);
 
@@ -51,13 +49,13 @@ app.use(morgan("tiny"))
 
 
 app.use("/api/v1/users",Users);
-app.use("/api/v1/conversation",Conversations);
+app.use("/api/v1/conversation",Conversation);
+app.use("/api/v1/messages",Message);
 
 app.get("/",(req,res)=>{
     res.send("Hello from the Server")
 })
 
-// have to read about it
 io.use(async(socket, next) => {
     console.log("New socket trying to connect. Headers:", socket.request.headers);
     await socketAuthenticator(socket, next);
@@ -82,27 +80,7 @@ io.on("connection", (socket) => {
 
     socket.on("SEND_MESSAGE", async ({ conversationId, text, members, tempId }, callback) => {
         try {
-            if (!tempId) tempId = uuid();
             const explicitTime = new Date();
-
-            const messageRealTime = {
-                _id: tempId,
-                conversationId,
-                text,
-                sender: {
-                    _id: userId,
-                    name: user.userName,
-                    photo: user.photo,
-                },
-                createdAt: explicitTime.toISOString(),
-                status: "pending",
-            };
-
-            const socketIds = getSocketIds(members);
-            io.to(socketIds).emit("NEW_MESSAGE", {
-                conversationId,
-                message: messageRealTime,
-            });
 
             const savedMessage = await Messages.create({
                 conversationId,
@@ -112,32 +90,50 @@ io.on("connection", (socket) => {
                 updatedAt: explicitTime,
             });
 
-            io.to(socketIds).emit("MESSAGE_CONFIRMED", {
-                tempId,
-                savedMessage: {
-                    _id: savedMessage._id,
-                    conversationId: savedMessage.conversationId,
-                    text: savedMessage.text,
-                    sender: {
-                        _id: userId,
-                        name: user.userName,
-                        photo: user.photo,
-                    },
-                    createdAt: savedMessage.createdAt,
-                    status: "sent",
+            await Conversations.findByIdAndUpdate(
+                conversationId,
+                {
+                    lastMessage: {
+                        text,
+                        sender: userId,
+                        createdAt: explicitTime,
+                        updatedAt: explicitTime
+                    },   
+                    updatedAt: explicitTime             
                 },
+                { new: true } 
+            );
+
+            const messagePayload = {
+                _id: savedMessage._id, 
+                conversationId,
+                text,
+                sender: {
+                    _id: userId,
+                    name: user.userName,
+                    photo: user.photo,
+                },
+                createdAt: savedMessage.createdAt.toISOString(),
+                status: "sent",
+            };
+
+            const socketIds = getSocketIds(members);
+            
+            io.to(socketIds).emit("NEW_MESSAGE", {
+                conversationId,
+                message: messagePayload,
             });
 
-            io.to(socketIds).emit("NEW_MESSAGE_ALERT", conversationId);
 
             if (callback) callback({ success: true });
+
         } catch (error) {
+            console.error("Send Message Error:", error);
             socket.emit("ERROR", {
                 type: "SEND_MESSAGE_FAILED",
                 message: error.message || "Failed to send message",
                 tempId,
             });
-
             if (callback) callback({ success: false, error: error.message });
         }
     });
@@ -153,20 +149,29 @@ io.on("connection", (socket) => {
     });
 
     socket.on("MESSAGE_SEEN", async ({ conversationId, messageId }) => {
-        await Messages.findByIdAndUpdate(messageId, {
-            $push: {
-                seen: {
-                    userId,
-                    name: user.userName,
-                    seenAt: new Date(),
-                },
-            },
-        });
+        try {
+            if (!mongoose.Types.ObjectId.isValid(messageId)) {
+                console.log("Ignored invalid Message ID in MESSAGE_SEEN:", messageId);
+                return;
+            }
 
-        io.to(conversationId).emit("MESSAGE_SEEN", {
-            messageId,
-            userId,
-        });
+            await Messages.findByIdAndUpdate(messageId, {
+                $push: {
+                    seen: {
+                        userId,
+                        name: user.userName,
+                        seenAt: new Date(),
+                    },
+                },
+            });
+
+            io.to(conversationId).emit("MESSAGE_SEEN", {
+                messageId,
+                userId,
+            });
+        } catch (error) {
+            console.error("Error in MESSAGE_SEEN:", error);
+        }
     });
 
     socket.on("disconnect", () => {
