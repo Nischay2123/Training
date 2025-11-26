@@ -13,6 +13,7 @@ import { socketAuthenticator } from "./src/middlerwares/auth.middleware.js";
 import {v4 as uuid} from 'uuid';
 import Messages from "./src/models/Message.model.js";
 import Conversations from "./src/models/Conversation.model.js";
+import mongoose from "mongoose";
 
 const port = process.env.PORT ?? 8000
 const userSocketIDs = new Map()
@@ -57,22 +58,27 @@ app.get("/",(req,res)=>{
 })
 
 io.use(async(socket, next) => {
-    console.log("New socket trying to connect. Headers:", socket.request.headers);
+    // console.log("New socket trying to connect. Headers:", socket.request.headers);
     await socketAuthenticator(socket, next);
 });
 
 
 io.on("connection", (socket) => {
     const user = socket.user;
-    const userId = user._id.toString();
+    const userId = user._id.toString(); 
 
     userSocketIDs.set(userId, socket.id);
     onlineUsers.add(userId);
 
-    const getSocketIds = (members) =>
-        members
-            .map((id) => userSocketIDs.get(id.toString()))
-            .filter((sid) => sid);
+    const getSocketIds = (members) => {
+        if (!members || !Array.isArray(members)) return [];
+        return members
+            .map((member) => {
+                const id = member._id ? member._id.toString() : member.toString();
+                return userSocketIDs.get(id);
+            })
+            .filter((socketId) => socketId); 
+    };
 
     socket.on("JOIN_CONVERSATION", ({ conversationId }) => {
         socket.join(conversationId);
@@ -86,6 +92,10 @@ io.on("connection", (socket) => {
                 conversationId,
                 text,
                 sender: userId,
+                seen: [{
+                    userId: userId,
+                    name: user.userName,
+                }],
                 createdAt: explicitTime,
                 updatedAt: explicitTime,
             });
@@ -98,32 +108,30 @@ io.on("connection", (socket) => {
                         sender: userId,
                         createdAt: explicitTime,
                         updatedAt: explicitTime
-                    },   
-                    updatedAt: explicitTime             
+                    },
+                    updatedAt: explicitTime
                 },
-                { new: true } 
+                { new: true }
             );
 
             const messagePayload = {
-                _id: savedMessage._id, 
+                _id: savedMessage._id,
                 conversationId,
                 text,
-                sender: {
-                    _id: userId,
-                    name: user.userName,
-                    photo: user.photo,
-                },
+                sender: userId,
                 createdAt: savedMessage.createdAt.toISOString(),
-                status: "sent",
+                updatedAt: savedMessage.updatedAt.toISOString(),
+                seen: savedMessage.seen
             };
 
             const socketIds = getSocketIds(members);
             
-            io.to(socketIds).emit("NEW_MESSAGE", {
-                conversationId,
-                message: messagePayload,
-            });
-
+            if (socketIds.length > 0) {
+                io.to(socketIds).emit("NEW_MESSAGE", {
+                    conversationId,
+                    message: messagePayload,
+                });
+            }
 
             if (callback) callback({ success: true });
 
@@ -138,39 +146,43 @@ io.on("connection", (socket) => {
         }
     });
 
-    socket.on("TYPING_START", ({ conversationId, members }) => {
-        const socketIds = getSocketIds(members);
-        socket.to(socketIds).emit("TYPING_START", { conversationId });
+    socket.on("TYPING_START", ({ conversationId }) => {
+        socket.to(conversationId).emit("TYPING_START", { conversationId });
     });
 
-    socket.on("TYPING_STOP", ({ conversationId, members }) => {
-        const socketIds = getSocketIds(members);
-        socket.to(socketIds).emit("TYPING_STOP", { conversationId });
+    socket.on("TYPING_STOP", ({ conversationId }) => {
+        socket.to(conversationId).emit("TYPING_STOP", { conversationId });
     });
 
     socket.on("MESSAGE_SEEN", async ({ conversationId, messageId }) => {
         try {
-            if (!mongoose.Types.ObjectId.isValid(messageId)) {
-                console.log("Ignored invalid Message ID in MESSAGE_SEEN:", messageId);
-                return;
-            }
+            const userObjectId = new mongoose.Types.ObjectId(String(userId));
 
-            await Messages.findByIdAndUpdate(messageId, {
-                $push: {
-                    seen: {
-                        userId,
-                        name: user.userName,
-                        seenAt: new Date(),
+            const updatedMessage = await Messages.findOneAndUpdate(
+                {
+                    _id: messageId,
+                    "seen.userId": { $ne: userObjectId }
+                },
+                {
+                    $push: {
+                        seen: {
+                            userId: userObjectId,
+                            name: user.userName,
+                            seenAt: new Date(),
+                        },
                     },
                 },
-            });
+                { new: true }
+            );
 
-            io.to(conversationId).emit("MESSAGE_SEEN", {
-                messageId,
-                userId,
-            });
+            if (updatedMessage) {
+                io.to(conversationId).emit("MESSAGE_SEEN", {
+                    messageId,
+                    userId,
+                });
+            }
         } catch (error) {
-            console.error("Error in MESSAGE_SEEN:", error);
+            console.error("CRITICAL DB ERROR in MESSAGE_SEEN:", error);
         }
     });
 

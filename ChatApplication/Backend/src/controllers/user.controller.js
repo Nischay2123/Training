@@ -87,7 +87,9 @@ export const loginUser = asyncHandler(async(req,res)=>{
         secure: false
     }
 
-    return res.status(200).cookie("accessToken",accessToken,options).cookie("refreshToken",refreshToken,options).json(new ApiResoponse(200,{"_id":user._id,"photo":user.photo,"userName":user.userName,"fullName":`${user.firstName} ${user.lastName}`},"User loggedin successfully"))
+    const sendPayload ={"_id":user._id,"photo":user.photo,"userName":user.userName,"fullName":`${user.firstName} ${user.lastName}`}
+
+    return res.status(200).cookie("accessToken",accessToken,options).cookie("refreshToken",refreshToken,options).json(new ApiResoponse(200,JSON.stringify(sendPayload),"User loggedin successfully"))
 })
 
 
@@ -144,7 +146,11 @@ export const refreshAccessToken = asyncHandler(async(req,res)=>{
 export const getUser = asyncHandler(async(req,res)=>{
     const {userName} = req.query;
 
-    const user = await Users.findOne({userName}).select("-password -refreshToken");
+    const user = await Users.find({
+        userName:{
+            $regex:userName 
+        }
+    }).select("-password -refreshToken");
 
     if (!user) {
         throw new ApiError(401,"User not exist");
@@ -167,7 +173,7 @@ export const getAvailableUsersForGroup = asyncHandler(async (req, res) => {
     if (!groupChat) {
         throw new ApiError(404, "Group conversation not found");
     }
-    const existingMemberIds = groupChat.participants.map((p) => p.userId);
+    const existingMemberIds = groupChat.participants.map((p) => p.userId.toString());
     
 
     const chats = await Conversations.find({
@@ -189,7 +195,7 @@ export const getAvailableUsersForGroup = asyncHandler(async (req, res) => {
         })
         .filter((friend) => {
             if (!friend) return false;
-            return !existingMemberIds.includes(friend._id);
+            return !existingMemberIds.includes(friend._id.toString());
         });
 
     return res.status(200).json(

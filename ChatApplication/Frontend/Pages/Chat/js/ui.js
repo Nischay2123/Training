@@ -11,6 +11,8 @@ export function renderChatList(conversations, notifyMap, selectedChatId, current
 
     conversations.forEach(chat => {
         const targetUser = getTargetUser(chat, currentUser);
+        console.log(chat);
+        
         
         const isActive = selectedChatId && chat._id === selectedChatId._id ? 'active' : '';
         
@@ -86,10 +88,14 @@ export function getTargetUser(chat, currentUser) {
     }
     
     const other = chat.participants.find(p => {
-        return p.userId._id !== currentUser._id;
+        const pId = p._id.toString() 
+        return pId !== currentUser._id.toString();
     });
+
+    if (!other) return { name: "Unknown", photo: null };
+
     return { 
-        name: other.userId.userName, 
-        photo: other.userId.photo 
+        name: other.userName, 
+        photo: other.photo 
     };
 }

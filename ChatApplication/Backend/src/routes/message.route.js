@@ -7,8 +7,8 @@ import { verifyJwt } from "../middlerwares/auth.middleware.js";
 
 const router = express.Router();
 
-router.route("/:coverstaionId").get(verifyJwt,getConversationMessages)
 router.route("/seen/:conversationId").put(verifyJwt, markAllAsSeen);
+router.route("/:conversationId").get(verifyJwt,getConversationMessages)
 
 
 

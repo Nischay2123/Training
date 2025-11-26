@@ -15,13 +15,18 @@
         <nav class="column-nav">
             <div class="nav-top">
                 <button class="nav-btn chats-btn">Chats</button>
-                <button class="nav-btn self-profile-btn">
+                <button class="nav-btn profile-btn">
                     Profile
+                </button>
+                <button class="nav-btn add-user-btn">
+                    +
+                </button>
+                <button class="nav-btn create-group-btn">
+                    Create Group
                 </button>
             </div>
 
             <div class="nav-bottom">
-                <!-- Bottom Button (Logout) -->
                 <button class="nav-btn logout-btn">
                     Logout
                 </button>
@@ -92,9 +97,49 @@
         </aside>
     </div>
 
+
+    <div id="addUserModal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title"></h3>
+                <button class="close-modal-btn">&times;</button>
+            </div>
+            
+            <div class="modal-body">
+                <input type="text" id="userSearchInput" class="modal-search-input" placeholder="Search users by name">
+                
+                <ul class="user-search-results">
+                    <li></li>
+                </ul>
+            </div>
+        </div>
+    </div>  
+    <div id="addNewGroup" class="modal-overlay">
+        <div id="modal-contant" class="modal-content">
+            <div id="modal-header" class="modal-header">
+                <h3 id="modal-title" class="modal-title"></h3>
+                <button id="close-modal-btn" class="close-modal-btn">&times;</button>
+            </div>
+            
+            <div id="modal-body" class="modal-body">
+                <input type="text" id="newGroupInput" class="modal-search-input" placeholder="Enter Group Name">
+                
+                <ul id="user-search-results" class="user-search-results">
+                    <li></li>
+                </ul>
+            </div>
+            <div class="modal-footer">
+                <button id="finalize-group-btn" class="action-btn">Create Group</button>
+            </div>
+        </div>
+    </div>  
+
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 
     <script type="module" src="js/main.js"></script>
+    <script defer type="module" src="js/newConvo.js"></script>
+    <script defer src="js/logOut.js"></script>
+    <script defer type="module" src="js/createGroup.js"></script>
 </body>
 </html>

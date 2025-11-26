@@ -9,13 +9,21 @@ import {
     scrollToBottom
 } from './ui.js';
 
+import { 
+    getLocalConversations, 
+    saveConversations, 
+    getLocalMessages, 
+    saveMessages ,
+    deleteMessage
+} from './db.js';
+
 const BASE_URL = "http://localhost:8000";
 const socket = io(BASE_URL, { withCredentials: true });
 
-let allConversations = [];
+export let allConversations = [];
 let selectedChatId = null; 
 const notifyMap = new Map(); 
-const currentUser = JSON.parse(window.localStorage.getItem("user"));
+export const currentUser = JSON.parse(window.localStorage.getItem("user"));
 
 document.addEventListener("DOMContentLoaded", async () => {
     if (!currentUser) return console.error("User not found in localStorage");
@@ -23,16 +31,41 @@ document.addEventListener("DOMContentLoaded", async () => {
     await getAllConversations();
 });
 
-const getAllConversations = async () => {
+export const getAllConversations = async (conversationId) => {
+
+    try {
+        const localData = await getLocalConversations();
+        if (localData.length > 0) {
+            console.log(" Rendering from IndexedDB (Offline Cache)");
+            allConversations = localData;
+            allConversations.forEach(c => notifyMap.set(c._id, c.unreadCount || 0));
+            renderChatList(allConversations, notifyMap, selectedChatId, currentUser);
+        }
+    } catch (e) {
+        console.error("IDB Read Error:", e);
+    }
+
     try {
         const response = await axios.get(`${BASE_URL}/api/v1/conversation`, { withCredentials: true });
         
         if (response.data && response.data.data) {
-            allConversations = response.data.data;
-            
+            const serverData = response.data.data;
+            console.log("Network Data Received. Updating Cache.");
+            allConversations = serverData;
+            await saveConversations(serverData);
             allConversations.forEach(c => {
                 notifyMap.set(c._id, c.unreadCount || 0);
             });
+            console.log(allConversations);
+            
+            if(conversationId){
+                const foundChat = allConversations.find(c => c._id === conversationId);
+                if (foundChat) {
+                    selectedChatId = foundChat;
+                    updateChatHeader(selectedChatId, currentUser);
+                    loadMessages(conversationId); 
+                }
+            }
 
             renderChatList(allConversations, notifyMap, selectedChatId, currentUser);
         }
@@ -42,35 +75,48 @@ const getAllConversations = async () => {
 };
 
 async function loadMessages(conversationId) {
+    const localMsgs = await getLocalMessages(conversationId);
+    if (localMsgs.length > 0) {
+        // console.log("test",localMsgs);
+        
+        renderMessages(localMsgs, currentUser);
+    }
     try {
         const response = await axios.get(`${BASE_URL}/api/v1/messages/${conversationId}`, {
             withCredentials: true
         });
-        const messages = response.data.data || [];
-        console.log(messages);
+        const Servermessages = response.data.data || [];
+        // console.log(Servermessages);
         
-        renderMessages(messages, currentUser);
+        renderMessages(Servermessages, currentUser);
+        if (Servermessages.length > 0) {
+            await saveMessages(Servermessages);
+        }
     } catch (err) {
         console.error("Error loading messages:", err);
     }
 }
 
-
 chatContainer.addEventListener("click", async (e) => {
     const item = e.target.closest(".chat-item");
     if (!item) return;
-
+    
     const convoId = item.getAttribute("data-id");
     if (selectedChatId && selectedChatId._id === convoId) return;
 
     selectedChatId = allConversations.find(c => c._id === convoId);
+    console.log("Chat container, ",selectedChatId._id);
+    
     notifyMap.set(convoId, 0); 
+    
     renderChatList(allConversations, notifyMap, selectedChatId, currentUser);
     updateChatHeader(selectedChatId, currentUser);
 
     socket.emit("JOIN_CONVERSATION", { conversationId: convoId });
 
     await loadMessages(convoId);
+    // console.log("done");
+    
 
     try {
         await axios.put(`${BASE_URL}/api/v1/messages/seen/${convoId}`, {}, {
@@ -89,25 +135,27 @@ chatContainer.addEventListener("click", async (e) => {
 });
 
 sendBtn.addEventListener("click", handleSendMessage);
+messageInput.addEventListener("keypress",(e)=>{
+    if (e.key === "Enter") {
+        e.preventDefault(); 
+        handleSendMessage();
+    }
+})
 
 function handleSendMessage() {
     const text = messageInput.value.trim();
     if (!text || !selectedChatId) return;
 
-    const members = selectedChatId.participants.map(e =>  e.userId);
+    const members = selectedChatId.participants.map(e => e._id.toString()); 
+    const timestamp = Date.now();
 
     socket.emit("SEND_MESSAGE", {
         conversationId: selectedChatId._id,
         text,
         members,
-        tempId: Date.now()
+        tempId: timestamp
     });
 
-    appendMessageToUI({
-        text,
-        sender: currentUser._id,
-        createdAt: new Date().toISOString()
-    }, currentUser);
 
     updateConversationList(selectedChatId._id, text, new Date());
     
@@ -115,9 +163,6 @@ function handleSendMessage() {
 }
 
 socket.on("NEW_MESSAGE", ({ conversationId, message }) => {
-    const myMessage = message.sender._id === currentUser._id;
-
-    if (myMessage) return; 
 
     const isChatOpen = selectedChatId && selectedChatId._id === conversationId;
 
@@ -128,7 +173,7 @@ socket.on("NEW_MESSAGE", ({ conversationId, message }) => {
         const currentCount = notifyMap.get(conversationId) || 0;
         notifyMap.set(conversationId, currentCount + 1);
     }
-
+    saveMessages([message]); 
     updateConversationList(conversationId, message.text, message.createdAt);
 });
 
@@ -151,7 +196,18 @@ function updateConversationList(conversationId, text, time) {
 
     if (targetConvo) {
         allConversations = [targetConvo, ...otherConvos];
-        
         renderChatList(allConversations, notifyMap, selectedChatId, currentUser);
     }
 }
+
+document.querySelector(".chat-header").addEventListener("click",(e)=>{
+    e.preventDefault();
+    const profile =document.querySelector(".column-profile");
+    profile.style.display=profile.style.display == "flex"?"none":"flex";
+})
+
+socket.on("MESSAGE_CONFIRMED", async ({ tempId, savedMessage }) => {
+    await saveMessages([savedMessage]);
+    
+    await deleteMessage("temp_" + tempId); 
+});

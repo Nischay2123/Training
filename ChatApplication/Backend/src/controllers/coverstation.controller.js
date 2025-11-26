@@ -4,6 +4,7 @@ import Users from "../models/User.model.js"
 import Messages from "../models/Message.model.js"
 import {ApiResoponse }from "../utils/ApiResponse.js"
 import {ApiError} from "../utils/ApiError.js"
+import mongoose from "mongoose"
 
 export const getChat = asyncHandler(async(req,res)=>{
     const {targetId} = req.body;
@@ -51,13 +52,12 @@ export const getChat = asyncHandler(async(req,res)=>{
 
 
 export const getAllConversations = asyncHandler(async (req, res) => {
-    const currentUserId = req.user._id;
+    const currentUserId = new mongoose.Types.ObjectId(String(req.user._id));
 
     const conversations = await Conversations.find({
         "participants.userId": currentUserId
     })
     .populate("participants.userId", "firstName lastName userName photo email") 
-    .populate("lastMessage.sender", "userName photo") 
     .sort({ updatedAt: -1 });
 
     if (!conversations || conversations.length === 0) {
@@ -66,6 +66,22 @@ export const getAllConversations = asyncHandler(async (req, res) => {
 
     const conversationsWithCount = await Promise.all(
         conversations.map(async (convo) => {
+            const convoObj = convo.toObject(); 
+            const formattedParticipants = convoObj.participants.map((p) => {
+                
+                const userDetails = p.userId || {}; 
+                
+                return {
+                    _id: userDetails._id,             
+                    firstName: userDetails.firstName, 
+                    lastName: userDetails.lastName,
+                    email: userDetails.email,
+                    userName: userDetails.userName,
+                    name: p.name, 
+                    photo: p.photo 
+                };
+            });
+
             const unreadCount = await Messages.countDocuments({
                 conversationId: convo._id,
                 sender: { $ne: currentUserId }, 
@@ -73,7 +89,8 @@ export const getAllConversations = asyncHandler(async (req, res) => {
             });
 
             return {
-                ...convo.toObject(),
+                ...convoObj,
+                participants: formattedParticipants, 
                 unreadCount: unreadCount
             };
         })
