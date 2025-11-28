@@ -3,16 +3,25 @@ import {ApiResoponse} from "../utils/ApiResponse.js"
 import Messages from "../models/Message.model.js"
 import mongoose from "mongoose"; 
 
-export const getConversationMessages = asyncHandler( async(req,res)=>{
-    const {conversationId } = req.params;
+export const getConversationMessages = asyncHandler(async (req, res) => {
+    const { conversationId } = req.params;
+    const { limit = 20, before } = req.query; // 'before' is the cursor
 
-    const messages = await Messages.find({conversationId:conversationId}).sort({ createdAt:1});
+    const query = { conversationId: conversationId };
 
-    if (!messages || messages.length === 0) {
-        return res.status(200).json(new ApiResoponse(200, [], "No messages available"));
+    if (before && before !== "undefined") {
+        query.createdAt = { $lt: new Date(before) }; 
     }
 
-    return res.status(200).json(new ApiResoponse(200, messages, "Messages fetched successfully"));
+    const messages = await Messages.find(query)
+        .sort({ createdAt: -1 }) 
+        .limit(parseInt(limit));
+
+    const sortedMessages = messages.reverse();
+
+    return res.status(200).json(
+        new ApiResoponse(200, sortedMessages, "Messages fetched successfully")
+    );
 });
 
 

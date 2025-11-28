@@ -64,7 +64,7 @@ export const loginUser = asyncHandler(async(req,res)=>{
     console.log(email, password);
     
     const user = await Users.findOne({email});
-    // console.log(user);
+    console.log(user);
     
     if (!user) {
         throw new ApiError(404, "User does not exist")
@@ -87,7 +87,7 @@ export const loginUser = asyncHandler(async(req,res)=>{
         secure: false
     }
 
-    const sendPayload ={"_id":user._id,"photo":user.photo,"userName":user.userName,"fullName":`${user.firstName} ${user.lastName}`}
+    const sendPayload ={"_id":user._id,"photo":user.photo,"userName":user.userName,"fullName":`${user.firstName} ${user.lastName}`,email:user.email}
 
     return res.status(200).cookie("accessToken",accessToken,options).cookie("refreshToken",refreshToken,options).json(new ApiResoponse(200,JSON.stringify(sendPayload),"User loggedin successfully"))
 })

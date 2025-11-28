@@ -35,8 +35,7 @@ const io = new Server(server , {
 } )
 
 env.config()
-connectDB(process.env.MONGOD_URI)
-
+connectDB(process.env.MONGOD_URI);
 
 app.use(cors(corsOptions));
 
@@ -86,12 +85,28 @@ io.on("connection", (socket) => {
 
     socket.on("SEND_MESSAGE", async ({ conversationId, text, members, tempId }, callback) => {
         try {
+            const existingMessage = await Messages.findOne({ tempId: tempId });
+
+            if (existingMessage) {
+                console.log(`Duplicate detected (${tempId}). Returning existing message.`);
+                
+                if (callback) {
+                    callback({ 
+                        success: true, 
+                        serverId: existingMessage._id, 
+                        savedMessage: existingMessage 
+                    });
+                }
+                return; 
+            }
+
             const explicitTime = new Date();
 
             const savedMessage = await Messages.create({
                 conversationId,
                 text,
                 sender: userId,
+                tempId, 
                 seen: [{
                     userId: userId,
                     name: user.userName,
@@ -114,45 +129,28 @@ io.on("connection", (socket) => {
                 { new: true }
             );
 
-            const messagePayload = {
-                _id: savedMessage._id,
-                conversationId,
-                text,
-                sender: userId,
-                createdAt: savedMessage.createdAt.toISOString(),
-                updatedAt: savedMessage.updatedAt.toISOString(),
-                seen: savedMessage.seen
-            };
-
             const socketIds = getSocketIds(members);
-            
             if (socketIds.length > 0) {
                 io.to(socketIds).emit("NEW_MESSAGE", {
-                    conversationId,
-                    message: messagePayload,
+                    tempId,
+                    message: savedMessage
                 });
             }
 
-            if (callback) callback({ success: true });
+            if (callback) {
+                callback({ 
+                    success: true, 
+                    serverId: savedMessage._id, 
+                    savedMessage: savedMessage 
+                });
+            }
 
         } catch (error) {
-            console.error("Send Message Error:", error);
-            socket.emit("ERROR", {
-                type: "SEND_MESSAGE_FAILED",
-                message: error.message || "Failed to send message",
-                tempId,
-            });
+            console.error("DB Error:", error);
             if (callback) callback({ success: false, error: error.message });
         }
     });
 
-    socket.on("TYPING_START", ({ conversationId }) => {
-        socket.to(conversationId).emit("TYPING_START", { conversationId });
-    });
-
-    socket.on("TYPING_STOP", ({ conversationId }) => {
-        socket.to(conversationId).emit("TYPING_STOP", { conversationId });
-    });
 
     socket.on("MESSAGE_SEEN", async ({ conversationId, messageId }) => {
         try {
@@ -176,9 +174,15 @@ io.on("connection", (socket) => {
             );
 
             if (updatedMessage) {
+                const seenEntry = updatedMessage.seen.find(
+                    (s) => s.userId.toString() === userId.toString()
+                );
+
                 io.to(conversationId).emit("MESSAGE_SEEN", {
                     messageId,
                     userId,
+                    name: user.userName,
+                    seenAt: seenEntry ? seenEntry.seenAt : new Date() 
                 });
             }
         } catch (error) {

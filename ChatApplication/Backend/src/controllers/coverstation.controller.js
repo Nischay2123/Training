@@ -6,49 +6,74 @@ import {ApiResoponse }from "../utils/ApiResponse.js"
 import {ApiError} from "../utils/ApiError.js"
 import mongoose from "mongoose"
 
-export const getChat = asyncHandler(async(req,res)=>{
-    const {targetId} = req.body;
-    console.log(targetId);
+export const getChat = asyncHandler(async(req, res) => {
+    const { targetId } = req.body;
     
+    const userId = req.user._id;
 
-    const userId =  req.user._id;
+    // 1. Check if conversation already exists
     const conversation = await Conversations.findOne({
         $and: [
-            {
-                "participants.userId": { 
-                    $all: [userId, targetId] 
-                }
-            },
-            {
-                "participants": { $size: 2 } 
-            }
+            { "participants.userId": { $all: [userId, targetId] } },
+            { "participants": { $size: 2 } }
         ]
     });
 
-    if(conversation) return res.status(200).json( 
-        new ApiResoponse(200,conversation,"Conversation already exist")
-    
-    )
+    if (conversation) {
+        return res.status(200).json(
+            new ApiResoponse(200, conversation, "Conversation already exists")
+        );
+    }
+
+    // 2. Prepare new conversation data
     const targetUser = await Users.findById(targetId);
-    if(!targetUser) throw new ApiError(401,"User not found or exist")
+    if (!targetUser) throw new ApiError(401, "User not found");
+
     const participants = [
         {
             userId,
-            photo:req.user.photo,
-            name:req.user.userName
+            photo: req.user.photo,
+            name: req.user.userName
         },
         {
-            userId:targetUser._id,
-            photo:targetUser.photo,
-            name:targetUser.userName
+            userId: targetUser._id,
+            photo: targetUser.photo,
+            name: targetUser.userName
         }
-    ]
-    const newConverstion = await Conversations.create({
-        participants:participants,
-    })
+    ];
 
-    return res.status(201).json(new ApiResoponse(201,newConverstion,"Conversation Created"))
-})
+    // 🔴 YOU MISSED THIS LINE BELOW: 
+    const newConverstion = await Conversations.create({
+        participants: participants,
+    });
+
+    // 3. Now Populate it (This part was correct in your snippet, but needs the ID from above)
+    const populatedConversation = await Conversations.findById(newConverstion._id)
+        .populate("participants.userId", "firstName lastName userName photo email");
+
+    if (!populatedConversation) {
+        throw new ApiError(500, "Failed to create conversation");
+    }
+
+    // 4. Format the response to match your other controllers
+    const convoObj = populatedConversation.toObject();
+    const formattedParticipants = convoObj.participants.map((p) => {
+        const userDetails = p.userId || {};
+        return {
+            _id: userDetails._id,
+            firstName: userDetails.firstName,
+            lastName: userDetails.lastName,
+            email: userDetails.email,
+            userName: userDetails.userName,
+            name: userDetails.userName, 
+            photo: userDetails.photo
+        };
+    });
+
+    convoObj.participants = formattedParticipants;
+
+    return res.status(201).json(new ApiResoponse(201, convoObj, "Conversation Created"));
+});
 
 
 export const getAllConversations = asyncHandler(async (req, res) => {
@@ -77,8 +102,8 @@ export const getAllConversations = asyncHandler(async (req, res) => {
                     lastName: userDetails.lastName,
                     email: userDetails.email,
                     userName: userDetails.userName,
-                    name: p.name, 
-                    photo: p.photo 
+                    name: userDetails.name, 
+                    photo: userDetails.photo 
                 };
             });
 
