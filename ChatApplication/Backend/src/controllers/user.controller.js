@@ -202,3 +202,27 @@ export const getAvailableUsersForGroup = asyncHandler(async (req, res) => {
         new ApiResoponse(200, availableUsers, "Available users retrieved successfully")
     );
 });
+
+
+export const updateUser = asyncHandler(async(req,res)=>{
+    const id = req.user._id ;
+    let photoUrl = null; 
+
+    if (req.file && req.file.buffer) {
+        photoUrl = await uploadOnCloudinary(req.file.buffer, "user_uploads");
+    }
+    console.log(photoUrl);
+    
+    const user = await Users.findByIdAndUpdate(
+        id,
+        {
+            $set:{
+                photo: photoUrl
+            }
+        },
+        {
+            new:true
+        }
+    )
+    return res.status(201).json(new ApiResoponse(200,user.photo,"User photo updated successfully"));
+})
