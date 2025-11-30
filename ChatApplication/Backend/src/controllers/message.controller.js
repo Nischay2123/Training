@@ -5,7 +5,7 @@ import mongoose from "mongoose";
 
 export const getConversationMessages = asyncHandler(async (req, res) => {
     const { conversationId } = req.params;
-    const { limit = 20, before } = req.query; // 'before' is the cursor
+    const { limit = 20, before } = req.query; 
 
     const query = { conversationId: conversationId };
 
