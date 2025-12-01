@@ -157,7 +157,7 @@ export const getUser = asyncHandler(async(req,res)=>{
     }
 
     res.status(200).json(
-        new ApiResoponse(200,user,"user found")
+        new ApiResoponse(200,user.toObject(),"user found")
     )
 })
 

@@ -26,9 +26,10 @@ router.route("/refresh-token").post(refreshAccessToken)
 
 router.route("/").get(verifyJwt,getUser)
 
+router.route("/userUpdate").put(verifyJwt,uploadSingleFile,updateUser);
+
 router.route("/:groupId").get(verifyJwt,getAvailableUsersForGroup)
 
-router.route("/userUpdate").put(verifyJwt,uploadSingleFile,updateUser);
 
 
 export default router;

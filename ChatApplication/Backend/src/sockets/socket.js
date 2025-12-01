@@ -64,6 +64,7 @@ export const initializeSocket = (server, corsOptions) => {
                     seen: [{
                         userId: userId,
                         name: user.userName,
+                        seenAt:explicitTime
                     }],
                     createdAt: explicitTime,
                     updatedAt: explicitTime,
@@ -83,13 +84,10 @@ export const initializeSocket = (server, corsOptions) => {
                     { new: true }
                 );
 
-                const socketIds = getSocketIds(members);
-                if (socketIds.length > 0) {
-                    io.to(socketIds).emit("NEW_MESSAGE", {
-                        tempId,
-                        message: savedMessage
-                    });
-                }
+                io.to(conversationId).emit("NEW_MESSAGE", {
+                    tempId,
+                    message: savedMessage
+                });
 
                 if (callback) {
                     callback({

@@ -30,7 +30,7 @@ export const markAllAsSeen = async (req, res) => {
     try {
         const { conversationId } = req.params;
         
-        const userId = new mongoose.Types.ObjectId(String(req.user._id));
+        const userId = req.user._id;
 
         await Messages.updateMany(
             { 

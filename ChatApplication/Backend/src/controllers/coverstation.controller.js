@@ -11,7 +11,6 @@ export const getChat = asyncHandler(async(req, res) => {
     
     const userId = req.user._id;
 
-    // 1. Check if conversation already exists
     const conversation = await Conversations.findOne({
         $and: [
             { "participants.userId": { $all: [userId, targetId] } },
@@ -25,7 +24,6 @@ export const getChat = asyncHandler(async(req, res) => {
         );
     }
 
-    // 2. Prepare new conversation data
     const targetUser = await Users.findById(targetId);
     if (!targetUser) throw new ApiError(401, "User not found");
 
@@ -42,12 +40,10 @@ export const getChat = asyncHandler(async(req, res) => {
         }
     ];
 
-    // 🔴 YOU MISSED THIS LINE BELOW: 
     const newConverstion = await Conversations.create({
         participants: participants,
     });
 
-    // 3. Now Populate it (This part was correct in your snippet, but needs the ID from above)
     const populatedConversation = await Conversations.findById(newConverstion._id)
         .populate("participants.userId", "firstName lastName userName photo email");
 
@@ -55,7 +51,6 @@ export const getChat = asyncHandler(async(req, res) => {
         throw new ApiError(500, "Failed to create conversation");
     }
 
-    // 4. Format the response to match your other controllers
     const convoObj = populatedConversation.toObject();
     const formattedParticipants = convoObj.participants.map((p) => {
         const userDetails = p.userId || {};
@@ -77,7 +72,7 @@ export const getChat = asyncHandler(async(req, res) => {
 
 
 export const getAllConversations = asyncHandler(async (req, res) => {
-    const currentUserId = new mongoose.Types.ObjectId(String(req.user._id));
+    const currentUserId = req.user._id;
 
     const conversations = await Conversations.find({
         "participants.userId": currentUserId
