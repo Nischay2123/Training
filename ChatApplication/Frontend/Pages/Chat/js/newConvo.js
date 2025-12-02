@@ -6,10 +6,11 @@ const closeModalBtn = document.querySelector('.close-modal-btn');
 const modalInput = document.getElementById('userSearchInput');
 const searchResultsList = document.querySelector('.user-search-results');
 const modalTitle = document.querySelector('.modal-header h3'); 
+
+let searchTimeout = null; 
 let newUsers = [];
 
 createNewChatBtn.addEventListener("click", openSearchModal);
-
 closeModalBtn.addEventListener("click", closeSearchModal);
 
 window.addEventListener("click", (e) => {
@@ -31,47 +32,60 @@ function closeSearchModal() {
     searchResultsList.innerHTML = "";
 }
 
-modalInput.addEventListener('input', async (e) => {
-    const query = e.target.value;
-    if(query.length > 0){
+modalInput.addEventListener('input', (e) => {
+    const query = e.target.value.trim();
+    
+    clearTimeout(searchTimeout); 
+
+    if(query.length === 0){
+        searchResultsList.innerHTML = "";
+        return;
+    }
+
+    searchTimeout = setTimeout(async () => {
         try {
             const response = await axios.get(`http://localhost:8000/api/v1/users/?userName=${query}`, { withCredentials: true });
             
             if (response.data && response.data.data) {
-                let existingIds = [];
+                const currentUserIdStr = currentUser._id.toString();
+                let existingIds = new Set(); 
                 
                 allConversations.forEach(chat => {
-                    if (chat.participants) {
-                        chat.participants.forEach(user => {
-                            existingIds.push(user._id);
+                    if (chat.name === "One-to-One" && chat.participants) {
+                        chat.participants.forEach(p => {
+                            const pId = (p._id || p).toString();
+                            if(pId !== currentUserIdStr) existingIds.add(pId);
                         });
                     }
                 });
                 
                 newUsers = response.data.data.filter(user => {
-                    return !existingIds.includes(user._id) && user._id!=currentUser._id;
+                    const userIdStr = user._id.toString();
+                    return !existingIds.has(userIdStr) && userIdStr !== currentUserIdStr;
                 });
-                console.log(newUsers);
                 
                 renderUserList(newUsers);
             }
         } catch (error) {
-            console.error(error);
+            console.error("Search Error:", error);
         }
-    } else {
-        searchResultsList.innerHTML = "";
-    }
+    }, 300); 
 });
 
 function renderUserList(users) {
     searchResultsList.innerHTML = '';
+    
+    if(users.length === 0) {
+        searchResultsList.innerHTML = '<li style="padding:10px; text-align:center; color:#ccc">No users found</li>';
+        return;
+    }
 
     users.forEach(user => {
         const li = document.createElement('li');
         li.className = 'search-item';
         
         const fullName = `${user.firstName} ${user.lastName}`;
-        const avatarSrc = user.photo ? user.photo : 'default-avtar.png';
+        const avatarSrc = user.photo ?? 'default-avtar.png';
 
         li.innerHTML = `
             <img src="${avatarSrc}" alt="${fullName}">
@@ -99,6 +113,36 @@ async function createConvo(user){
             closeSearchModal();
         }
     } catch (error) {
-        console.log('Conversation is not created: ', error.message);
+        console.error('Conversation creation failed:', error.message);
     }
 }
+
+axios.interceptors.response.use(
+    (response) => { 
+        return response;
+    }, 
+    async (error) => {
+        const originalRequest = error.config;
+        
+        if (error.response?.status === 401 && !originalRequest._retry) {
+            originalRequest._retry = true; 
+            console.log('🔄 Access Token expired. Attempting refresh...');
+            
+            try {
+                const refreshUrl = `${BASE_URL}/api/v1/users/refresh-token`;
+                
+                await axios.post(refreshUrl, {}, { withCredentials: true });
+                
+                console.log('✅ Refresh successful. Retrying original request.');
+
+                return axios(originalRequest);
+
+            } catch (refreshError) {
+                console.error("❌ Refresh failed. Logging out...", refreshError);
+                window.location.href="/ChatApplication/Frontend/Pages/Login/login.html";
+                return Promise.reject(refreshError);
+            }
+        }
+        return Promise.reject(error);
+    }
+);

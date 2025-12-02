@@ -128,3 +128,62 @@
 .send-btn:hover {
     background-color: var(--accent-hover);
 }
+
+.sender-name {
+    font-size: 12px;
+    color: #666;
+    margin-bottom: 2px;
+    margin-left: 8px; 
+    display: block;
+    font-weight: bold;
+}
+
+.msg-status-icon {
+    font-size: 12px;
+    margin-left: 5px;
+    cursor: default;
+}
+
+.message-wrapper.failed .bubble {
+    background-color: #ffdddd; 
+    border: 1px solid red;
+}
+
+.message-wrapper.failed .msg-status-icon {
+    color: red;
+    cursor: pointer; 
+    font-weight: bold;
+}
+
+.message-wrapper.failed .msg-status-icon::after {
+    content: " ↻ Retry"; 
+}
+.no-chat-placeholder {
+    flex: 2; 
+    display: flex;
+    flex-direction: column;
+    background-color: var(--bg-chat);
+    position: relative;
+    min-width: 400px;
+    align-items: center;
+    justify-content: center;
+}
+
+.placeholder-content h3 {
+    margin-top: 20px;
+    font-size: 1.5rem;
+    font-weight: 300;
+}
+
+@media (max-width: 425px) {
+
+    .column-active-chat {
+        display: none;
+        min-width: 0; 
+        flex: 1; 
+    }
+
+    .no-chat-placeholder{
+        display: none;
+    }
+}

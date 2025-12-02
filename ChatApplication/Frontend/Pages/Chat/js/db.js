@@ -70,25 +70,52 @@ export async function saveConversations(serverConversations) {
 }
 
 export async function saveMessages(messages) {
-    const database = await getDB();
+    const database = await getDB();
 
-    return new Promise((resolve, reject) => {
-        const transaction = database.transaction(["messages"], "readwrite");
-        const store = transaction.objectStore("messages");
+    return new Promise(async (resolve, reject) => {
+        const transaction = database.transaction(["messages"], "readwrite");
+        const store = transaction.objectStore("messages");
+        const index = store.index("conversationId");
 
-        messages.forEach(msg => {
-            if(msg._id && msg.conversationId) {
-                store.put(msg);
-            }
-        });
+        const affectedConvoIds = new Set();
+        
+        messages.forEach(msg => {
+            if(msg._id && msg.conversationId) {
+                store.put(msg);
+                affectedConvoIds.add(msg.conversationId);
+            }
+        });
 
-        transaction.oncomplete = () => resolve("Messages saved");
-        transaction.onerror = (e) => {
-            console.log("Save Error:", e.target.error);
-            reject(e);
-        };
-    });
+        for (const convoId of affectedConvoIds) {
+            const request = index.getAll(convoId);
+            
+            request.onsuccess = (e) => {
+                const allMsgs = e.target.result;
+                
+                if (allMsgs.length > 20) {
+                    allMsgs.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+                    
+                    const deleteCount = allMsgs.length - 20;
+                    const msgsToDelete = allMsgs.slice(0, deleteCount); 
+
+                    msgsToDelete.forEach(oldMsg => {
+                        if (!oldMsg._id.toString().startsWith("temp_")) {
+                            store.delete(oldMsg._id);
+                            // console.log("Pruning old message:", oldMsg._id);
+                        }
+                    });
+                }
+            };
+        }
+
+        transaction.oncomplete = () => resolve("Messages saved and pruned");
+        transaction.onerror = (e) => {
+            console.log("Save Error:", e.target.error);
+            reject(e);
+        };
+    });
 }
+
 
 export async function getLocalConversations() {
     const database = await getDB();
@@ -100,8 +127,19 @@ export async function getLocalConversations() {
         const request = store.getAll();
 
         request.onsuccess = (event) => {
-            resolve(event.target.result || []);
+            const conversations = event.target.result || [];
+            
+            conversations.sort((a, b) => {
+                
+                const dateA = new Date(a.updatedAt || a.createdAt || 0);
+                const dateB = new Date(b.updatedAt || b.createdAt || 0);
+
+                return dateB - dateA; 
+            });
+
+            resolve(conversations);
         };
+
         request.onerror = (event) => {
             console.log("Fetch Error:", event.target.error);
             reject(event.target.error);
@@ -161,3 +199,18 @@ export async function clearDB() {
         };
     });
 }
+
+export async function updateSingleConversation(conversation) {
+    const database = await getDB();
+
+    return new Promise((resolve, reject) => {
+        const transaction = database.transaction(["conversations"], "readwrite");
+        const store = transaction.objectStore("conversations");
+
+        store.put(conversation);
+
+        transaction.oncomplete = () => resolve("Conversation updated");
+        transaction.onerror = (e) => reject(e.target.error);
+    });
+}
+    

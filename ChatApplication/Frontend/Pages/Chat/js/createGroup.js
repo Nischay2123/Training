@@ -11,7 +11,6 @@ const finalizeGroupBtn = document.getElementById('finalize-group-btn');
 let selectedParticipants = [];
 
 createGroupBtn.addEventListener("click", openSearchModal);
-
 closeModalBtn.addEventListener("click", closeSearchModal);
 
 window.addEventListener("click", (e) => {
@@ -29,14 +28,21 @@ finalizeGroupBtn.addEventListener("click", async () => {
         return;
     }
 
+    if (selectedParticipants.length === 0) {
+        alert("Please select at least one member");
+        return;
+    }
+
+    const originalBtnText = finalizeGroupBtn.innerText;
+    finalizeGroupBtn.disabled = true;
+    finalizeGroupBtn.innerText = "Creating...";
+
     const memberIds = selectedParticipants.map(user => user._id);
     
     const payload = {
         name: groupName,
         participants: memberIds 
     };
-
-    console.log("Payload:", payload);
 
     try {
         const response = await axios.post(`http://localhost:8000/api/v1/conversation/group`, payload, { withCredentials: true });
@@ -46,7 +52,11 @@ finalizeGroupBtn.addEventListener("click", async () => {
            await getAllConversations();
         }
     } catch (error) {
-        console.error(error);
+        console.error("Group creation failed:", error);
+        alert("Failed to create group. Please try again.");
+    } finally {
+        finalizeGroupBtn.disabled = false;
+        finalizeGroupBtn.innerText = originalBtnText;
     }
 });
 
@@ -59,24 +69,32 @@ function openSearchModal(e) {
     
     selectedParticipants = []; 
     
-    let data = [];
-    allConversations.forEach((e) => {
-        if (e.name === "One-to-One") {
-            e.participants.forEach((c) => {
-                if (c._id != currentUser._id) {
-                    data.push({
-                        firstName: c.firstName,
-                        lastName: c.lastName,
-                        _id: c._id,
-                        userName: c.userName,
-                        photo: c.photo
-                    });
+    const uniqueUsersMap = new Map();
+    const currentUserIdStr = currentUser._id.toString();
+
+    allConversations.forEach((chat) => {
+        if (chat.name === "One-to-One" && chat.participants) {
+            chat.participants.forEach((p) => {
+                const pId = (p._id || p).toString();
+
+                if (pId !== currentUserIdStr) {
+                    if (!uniqueUsersMap.has(pId)) {
+                        uniqueUsersMap.set(pId, {
+                            firstName: p.firstName,
+                            lastName: p.lastName,
+                            _id: pId,
+                            userName: p.userName,
+                            photo: p.photo
+                        });
+                    }
                 }
             })
         }
-    })
+    });
+
+    const uniqueUserList = Array.from(uniqueUsersMap.values());
     
-    renderUserList(data);
+    renderUserList(uniqueUserList);
     modalInput.focus();
 }
 
@@ -90,13 +108,20 @@ function closeSearchModal() {
 function renderUserList(users) {
     searchResultsList.innerHTML = '';
     
+    if (users.length === 0) {
+        searchResultsList.innerHTML = '<li style="padding:15px; text-align:center; color:#888;">No contacts found to add.</li>';
+        return;
+    }
+
+    const fragment = document.createDocumentFragment();
+
     users.forEach(participant => {
         const li = document.createElement("li");
         li.className = 'search-item'; 
 
         const checkbox = document.createElement("input");
         checkbox.type = "checkbox";
-        checkbox.id = participant._id;
+        checkbox.id = `checkbox-${participant._id}`; 
         checkbox.value = JSON.stringify(participant);
         
         checkbox.addEventListener("change", (e) => {
@@ -109,15 +134,15 @@ function renderUserList(users) {
             }
         });
 
-        const avatarSrc = participant.photo ? participant.photo : 'default-avtar.png';
+        const avatarSrc = participant.photo ?? 'default-avtar.png';
         const img = document.createElement('img');
         img.src = avatarSrc;
-        img.alt = participant.userName;
+        img.alt = participant.userName || "User";
 
         const div = document.createElement('div');
         div.className = 'search-details';
         
-        const fullName = `${participant.firstName} ${participant.lastName}`;
+        const fullName = `${participant.firstName || ''} ${participant.lastName || ''}`.trim() ;
         
         div.innerHTML = `
             <span class="search-name">${fullName}</span>
@@ -135,6 +160,38 @@ function renderUserList(users) {
         li.appendChild(img);
         li.appendChild(div);
 
-        searchResultsList.appendChild(li);
+        fragment.appendChild(li);
     });
+
+    searchResultsList.appendChild(fragment);
 }
+
+axios.interceptors.response.use(
+    (response) => { 
+        return response;
+    }, 
+    async (error) => {
+        const originalRequest = error.config;
+        
+        if (error.response?.status === 401 && !originalRequest._retry) {
+            originalRequest._retry = true; 
+            console.log('🔄 Access Token expired. Attempting refresh...');
+            
+            try {
+                const refreshUrl = `${BASE_URL}/api/v1/users/refresh-token`;
+                
+                await axios.post(refreshUrl, {}, { withCredentials: true });
+                
+                console.log('✅ Refresh successful. Retrying original request.');
+
+                return axios(originalRequest);
+
+            } catch (refreshError) {
+                console.error("❌ Refresh failed. Logging out...", refreshError);
+                window.location.href="/ChatApplication/Frontend/Pages/Login/login.html";
+                return Promise.reject(refreshError);
+            }
+        }
+        return Promise.reject(error);
+    }
+);
