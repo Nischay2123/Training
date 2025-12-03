@@ -37,6 +37,10 @@
     transform: scale(1.05);
 }
 
+.add-user-btn{
+    font-size: xx-large;
+}
+
 .chats-btn {
     display: none; 
 }

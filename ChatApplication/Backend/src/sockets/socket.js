@@ -1,4 +1,3 @@
-// src/socket.js
 import { Server } from "socket.io";
 import { socketAuthenticator } from "../middlerwares/auth.middleware.js"; 
 import Messages from "../models/Message.model.js"; 
@@ -6,7 +5,6 @@ import Conversations from "../models/Conversation.model.js";
 import mongoose from "mongoose";
 
 const userSocketIDs = new Map();
-const onlineUsers = new Set();
 
 export const initializeSocket = (server, corsOptions) => {
     const io = new Server(server, {
@@ -16,23 +14,22 @@ export const initializeSocket = (server, corsOptions) => {
     io.use(async(socket, next) => {
         await socketAuthenticator(socket, next);
     });
-
+    
     io.on("connection", (socket) => {
         const user = socket.user;
         const userId = user._id.toString();
 
         userSocketIDs.set(userId, socket.id);
-        onlineUsers.add(userId);
-
-        const getSocketIds = (members) => {
-            if (!members || !Array.isArray(members)) return [];
-            return members
-                .map((member) => {
-                    const id = member._id ? member._id.toString() : member.toString();
-                    return userSocketIDs.get(id);
-                })
-                .filter((socketId) => socketId);
-        };
+        socket.join(userId);
+        // const getSocketIds = (members) => {
+        //     if (!members || !Array.isArray(members)) return [];
+        //     return members
+        //         .map((member) => {
+        //             const id = member._id ? member._id.toString() : member.toString();
+        //             return userSocketIDs.get(id);
+        //         })
+        //         .filter((socketId) => socketId);
+        // };
 
         socket.on("JOIN_CONVERSATION", ({ conversationId }) => {
             socket.join(conversationId);
@@ -84,9 +81,12 @@ export const initializeSocket = (server, corsOptions) => {
                     { new: true }
                 );
 
-                io.to(conversationId).emit("NEW_MESSAGE", {
-                    tempId,
-                    message: savedMessage
+                members.forEach((memberId) => {
+                    const memberRoom = memberId.toString();
+                    io.to(memberRoom).emit("NEW_MESSAGE", {
+                        tempId,
+                        message: savedMessage
+                    });
                 });
 
                 if (callback) {
@@ -140,11 +140,54 @@ export const initializeSocket = (server, corsOptions) => {
                 console.error("CRITICAL DB ERROR in MESSAGE_SEEN:", error);
             }
         });
+        socket.on("New_Conversation",async({conversationId})=>{
+            try {
+                const conversation = await Conversations.findById(conversationId).populate("participants.userId", "firstName lastName userName photo email") ;
+            
+                if (conversation) {
+                    const convoObj=conversation.toObject();
+                    const formattedParticipants = convoObj.participants.map((p) => {
+                        
+                        const userDetails = p.userId || {}; 
+                        
+                        return {
+                            _id: userDetails._id,             
+                            firstName: userDetails.firstName, 
+                            lastName: userDetails.lastName,
+                            email: userDetails.email,
+                            userName: userDetails.userName,
+                            name: userDetails.name, 
+                            photo: userDetails.photo 
+                        };
+                    });
+            
+            
+                    const payload= {
+                        ...convoObj,
+                        participants: formattedParticipants, 
+                        unreadCount: 0
+                    };
+                    const currentUserId = socket.user._id.toString(); 
 
+                    formattedParticipants.forEach((participant) => {
+                        const participantId = participant._id.toString();
+
+                        if (participantId !== currentUserId) {
+                            
+                            const receiverSocketId = userSocketIDs.get(participantId);
+
+                            if (receiverSocketId) {
+                                io.to(receiverSocketId).emit("NEW_CONVERSATION_CREATED", payload);
+                            }
+                        }
+                    });
+                }
+            } catch (error) {
+                console.error("error in backend socket in new conversation:", error);
+            }
+        })
         socket.on("disconnect", () => {
             userSocketIDs.delete(userId);
-            onlineUsers.delete(userId);
-            socket.broadcast.emit("ONLINE_USERS", [...onlineUsers]);
         });
     });
 

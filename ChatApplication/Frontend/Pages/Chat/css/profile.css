@@ -102,18 +102,16 @@
     margin: 10px;
 }
 
-/* Specific style for Upload Button */
 .upload-btn {
-    background-color: #3b82f6; /* Blue */
+    background-color: #3b82f6; 
     color: white;
 }
 .upload-btn:hover {
     background-color: #2563eb;
 }
 
-/* Specific style for Logout Button */
 .logout-btn-profile {
-    background-color: #ef4444; /* Red */
+    background-color: #ef4444; 
     color: white;
 }
 .logout-btn-profile:hover {

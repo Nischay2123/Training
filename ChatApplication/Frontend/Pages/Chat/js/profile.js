@@ -24,8 +24,8 @@ export function targetUserProfile(e,selectedChatId) {
         
         console.log(messageCol.style.display);
         
-        if(messageCol.style.display=="")chatListcol.style.display=chatListcol.style.display==="none"?"flex":"none";
-        else messageCol.style.display=messageCol.style.display===""?"flex":"";
+        if(messageCol.style.display=="none")chatListcol.style.display=chatListcol.style.display==="none"?"flex":"none";
+        else messageCol.style.display=messageCol.style.display==="none"?"flex":"none";
     }
     profile.style.display=profile.style.display == "flex"?"none":"flex";
     const isCurrentUser =selectedChatId._id==currentUser._id 
@@ -40,7 +40,7 @@ export function targetUserProfile(e,selectedChatId) {
             email:currentUser.email
         }
     }else targetUser= getTargetUser(selectedChatId, currentUser);
-    console.log(isCurrentUser,  targetUser);
+    // console.log(isCurrentUser,  targetUser);
 
 
     image.src=targetUser.photo ?? `default-avtar.png`;
@@ -51,11 +51,11 @@ export function targetUserProfile(e,selectedChatId) {
     backBtn.innerHTML=isCurrentUser?"":"⬅️";
     
 }
-if (backBtn) {
+if (backBtn ) {
     backBtn.addEventListener("click",(e)=>{
         e.preventDefault();
         profile.style.display=profile.style.display == "flex"?"none":"flex";
-        messageCol.style.display=messageCol.style.display===""?"flex":"";
+        if(window.matchMedia("(max-width: 425px)").matches)messageCol.style.display=messageCol.style.display==="none"?"flex":"none";
 
     })
 }
@@ -181,9 +181,10 @@ if(chatBtn){
             activeItem.classList.remove("active");
         }
 
-        messageCol.style.display="";
+        messageCol.style.display="none";
         chatListcol.style.display="flex";
         profile.style.display="none";
         // selectedChatId=null;
     })
 }
+

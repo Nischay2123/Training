@@ -5,6 +5,7 @@
     background-color: var(--bg-chat);
     position: relative;
     min-width: 400px;
+    transition: width 0.5s ease-in-out, background-color 0.5s ease-in-out;
 }
 
 .chat-header {
@@ -86,7 +87,6 @@
     padding: 0 4px;
 }
 
-/* Input Area */
 .chat-input-area {
     height: 80px;
     background-color: var(--bg-white);

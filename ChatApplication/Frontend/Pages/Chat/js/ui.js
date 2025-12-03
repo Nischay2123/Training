@@ -6,6 +6,7 @@ export const profileContainer = document.querySelector(".column-profile");
 export const statusImage = document.querySelector(".status-image img");
 export const statusName = document.querySelector(".status-name");
 
+import { getLocalMessages } from "./db.js";
 import { currentUser } from "./main.js";
 import { openSearchModal } from "./seen.js";
 
@@ -95,6 +96,7 @@ export function renderMessages(messages, currentUser,participants) {
     messages.forEach(msg => appendMessageToUI(msg, currentUser,participants));
     scrollToBottom();
 }
+
 if (messageContainer) {
     messageContainer.addEventListener("click", (e) => {
         const wrapper = e.target.closest(".message-wrapper");
@@ -110,6 +112,7 @@ if (messageContainer) {
         openSearchModal(e, msgObj);
     });
 }
+
 export function appendMessageToUI(msg, currentUser, participants) {
     const senderId =  msg.sender; 
     const isOutgoing = senderId === currentUser._id;

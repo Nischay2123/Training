@@ -4,7 +4,6 @@ import Users from "../models/User.model.js"
 import Messages from "../models/Message.model.js"
 import {ApiResoponse }from "../utils/ApiResponse.js"
 import {ApiError} from "../utils/ApiError.js"
-import mongoose from "mongoose"
 
 export const getChat = asyncHandler(async(req, res) => {
     const { targetId } = req.body;
@@ -16,11 +15,40 @@ export const getChat = asyncHandler(async(req, res) => {
             { "participants.userId": { $all: [userId, targetId] } },
             { "participants": { $size: 2 } }
         ]
-    });
+    }).populate("participants.userId", "firstName lastName userName photo email") ;
+
+    
 
     if (conversation) {
+        const convoObj=conversation.toObject();
+        const formattedParticipants = convoObj.participants.map((p) => {
+            
+            const userDetails = p.userId || {}; 
+            
+            return {
+                _id: userDetails._id,             
+                firstName: userDetails.firstName, 
+                lastName: userDetails.lastName,
+                email: userDetails.email,
+                userName: userDetails.userName,
+                name: userDetails.name, 
+                photo: userDetails.photo 
+            };
+        });
+
+        const unreadCount = await Messages.countDocuments({
+            conversationId: convo._id,
+            sender: { $ne: currentUserId }, 
+            "seen.userId": { $ne: currentUserId }
+        });
+
+        const payload= {
+            ...convoObj,
+            participants: formattedParticipants, 
+            unreadCount: unreadCount
+        };
         return res.status(200).json(
-            new ApiResoponse(200, conversation, "Conversation already exists")
+            new ApiResoponse(200, payload, "Conversation already exists")
         );
     }
 

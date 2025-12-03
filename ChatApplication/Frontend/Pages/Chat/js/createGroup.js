@@ -1,4 +1,5 @@
-import { allConversations, currentUser, getAllConversations } from "./main.js";
+import { allConversations, currentUser, notifyMap, selectedChatId, socket } from "./main.js";
+import { renderChatList } from "./ui.js";
 
 const createGroupBtn = document.querySelector(".create-group-btn");
 const modal = document.getElementById('addNewGroup');
@@ -48,11 +49,21 @@ finalizeGroupBtn.addEventListener("click", async () => {
         const response = await axios.post(`http://localhost:8000/api/v1/conversation/group`, payload, { withCredentials: true });
         
         if(response.data.success) {
-           closeSearchModal();
-           await getAllConversations();
+            const newChat = response.data.data; 
+           
+            const exists = allConversations.some(c => c._id === newChat._id);
+
+            if (!exists) {
+                allConversations.unshift(newChat);
+                
+                renderChatList(allConversations, notifyMap, selectedChatId, currentUser);
+            }
+            socket.emit("New_Conversation", { conversationId: newChat._id });
+
+            closeSearchModal();
         }
     } catch (error) {
-        console.error("Group creation failed:", error);
+        console.error("Group creation failed:", error.response);
         alert("Failed to create group. Please try again.");
     } finally {
         finalizeGroupBtn.disabled = false;
@@ -64,6 +75,8 @@ function openSearchModal(e) {
     e.preventDefault();
     
     modalTitle.innerHTML = "Create New Group";
+    modalInput.style.display="inline";
+    finalizeGroupBtn.style.display= "inline-block";
     modalInput.placeholder = "Enter Group Name...";
     modal.style.display = "flex";
     
@@ -195,3 +208,42 @@ axios.interceptors.response.use(
         return Promise.reject(error);
     }
 );
+
+export function openGroupModal(e,selectedChat){
+    e.preventDefault();
+    modalTitle.innerHTML = `${selectedChat.name} - members`;
+    modalInput.style.display = "none";
+    finalizeGroupBtn.style.display= "none";
+    modal.style.display = "flex";
+    renderGroupList(selectedChat.participants);
+}
+
+function renderGroupList(participants){
+    searchResultsList.innerHTML = '';
+    // console.log(participants);
+    const fragment = document.createDocumentFragment();
+    
+    participants.forEach(participant => {
+        const li = document.createElement("li");
+        li.className = 'search-item'
+        const avatarSrc = participant.photo ?? 'default-avtar.png';
+        const img = document.createElement('img');
+        img.src = avatarSrc;
+        img.alt = participant.userName || "User";
+
+        const div = document.createElement('div');
+        div.className = 'search-details';
+        
+        const fullName = `${participant.firstName || ''} ${participant.lastName || ''}`.trim() ;
+        
+        div.innerHTML = `
+            <span class="search-name">${fullName}</span>
+            <span class="search-email">@${participant.userName}</span>
+        `;
+        li.appendChild(img)
+        li.appendChild(div);
+
+        fragment.appendChild(li);
+    })
+    searchResultsList.appendChild(fragment);
+}

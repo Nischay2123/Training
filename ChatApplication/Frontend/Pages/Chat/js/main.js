@@ -23,19 +23,20 @@ import {
 
 import { 
     targetUserProfileCleanUp,
-    targetUserProfile 
+    targetUserProfile, 
 } from './profile.js';
 import { refreshCurrentSeenModal } from './seen.js';
+import { openGroupModal } from './createGroup.js';
 
 const BASE_URL = "http://localhost:8000";
-const socket = io(BASE_URL, { withCredentials: true });
+export const socket = io(BASE_URL, { withCredentials: true });
 
 const chatHeader = document.querySelector(".chat-header");
 
 export let allConversations = [];
 export const currentUser = JSON.parse(window.localStorage.getItem("user"));
-let selectedChatId = null; 
-const notifyMap = new Map(); 
+export let selectedChatId = null; 
+export const notifyMap = new Map(); 
 let hasMoreMessages = true; 
 let isLoadingHistory = false;
 
@@ -86,19 +87,23 @@ socket.on("connect", async () => {
 
 socket.on("NEW_MESSAGE", ({ message }) => {
     const senderId =  message.sender.toString();
-    if (senderId.toString() === currentUser._id.toString()) return; 
+    if (senderId=== currentUser._id.toString()) return; 
     
-    const chatObj = allConversations.find(c => c._id === message.conversationId);
-    const participants = chatObj ? chatObj.participants : [];
+    const msgConvoId = String(message.conversationId);
+    const openChatId = selectedChatId ? String(selectedChatId._id) : null;
     
     const isChatOpen = selectedChatId && selectedChatId._id === message.conversationId;
 
     if (isChatOpen) {
+        const chatObj = allConversations.find(c => c._id === message.conversationId);
+        const participants = chatObj ? chatObj.participants : [];
         appendMessageToUI(message, currentUser, participants);
         socket.emit("MESSAGE_SEEN", { conversationId: message.conversationId, messageId: message._id });
     } else {
-        const currentCount = notifyMap.get(message.conversationId) || 0;
-        notifyMap.set(message.conversationId, currentCount + 1);
+        console.log("new message");
+        const currentCount = notifyMap.get(msgConvoId) || 0;
+        const newCount = currentCount + 1;
+        notifyMap.set(message.conversationId,newCount);
     }
     
     saveMessages([message]); 
@@ -126,7 +131,9 @@ socket.on("MESSAGE_SEEN", ({ messageId, userId, name, seenAt }) => {
     }
 });
 
-chatContainer.addEventListener("click", async (e) => {
+chatContainer.addEventListener("click",(e)=>handleOpenMessage(e));
+
+export const handleOpenMessage =async (e) => {
     targetUserProfileCleanUp();
     document.querySelector(".no-chat-placeholder").style.display="none";
     document.querySelector(".column-active-chat").style.display="flex";
@@ -144,7 +151,7 @@ chatContainer.addEventListener("click", async (e) => {
     if (selectedChatId && selectedChatId._id === convoId) return;
 
     selectedChatId = allConversations.find(c => c._id === convoId);
-    // console.log("Chat container, ",selectedChatId._id);
+    console.log("Chat container, ",selectedChatId);
     
     notifyMap.set(convoId, 0); 
     
@@ -163,7 +170,7 @@ chatContainer.addEventListener("click", async (e) => {
             c.unreadCount=0;
         }
     })
-});
+}
 
 sendBtn.addEventListener("click", handleSendMessage);
 
@@ -175,8 +182,11 @@ messageInput.addEventListener("keypress",(e)=>{
 });
 
 chatHeader.addEventListener("click",(e)=>{
-    console.log(chatHeader);
-    targetUserProfile(e,selectedChatId)
+    // console.log(chatHeader);
+    console.log("inside chat header",selectedChatId);
+    
+    if(selectedChatId.name=="One-to-One")targetUserProfile(e,selectedChatId)
+    else openGroupModal(e,selectedChatId);
 });
 
 document.querySelector(".profile-btn").addEventListener("click",e=> targetUserProfile(e,currentUser));
@@ -285,7 +295,7 @@ async function handleSendMessage() {
     const text = messageInput.value.trim();
     if (!text || !selectedChatId) return;
 
-    const members = selectedChatId.participants.map(e => e._id.toString()); 
+    const members = selectedChatId.participants.map(e => (e._id || e.userId).toString()); 
     const tempId = "temp_" + Date.now(); 
     const frozenTime = new Date().toISOString();
 
@@ -314,12 +324,15 @@ async function handleSendMessage() {
 }
 
 function updateConversationList(conversationId, text, time,sender) {
+    console.log("update list");
+    
     let targetConvo = null;
     const otherConvos = [];
-
+    const currentBadgeCount = notifyMap.get(conversationId) || 0;
     allConversations.forEach(c => {
         if (c._id === conversationId) {
             c.lastMessage = { text, createdAt: time ,sender};
+            c.unreadCount= currentBadgeCount;
             targetConvo = c;
         } else {
             otherConvos.push(c);
@@ -328,6 +341,8 @@ function updateConversationList(conversationId, text, time,sender) {
 
     if (targetConvo) {
         allConversations = [targetConvo, ...otherConvos];
+        console.log("before render list");
+        
         renderChatList(allConversations, notifyMap, selectedChatId, currentUser);
         updateSingleConversation(targetConvo).catch(err => console.error("Failed to save convo update", err));
     }
@@ -421,15 +436,14 @@ function markMessageFailed(payload) {
     if (iconEl) {
         iconEl.innerText = "❗"; 
         
-        const newIcon = iconEl.cloneNode(true);
-        iconEl.parentNode.replaceChild(newIcon, iconEl);
-        
-        newIcon.addEventListener("click", (e) => {
+        iconEl.addEventListener("click", (e) => {
             e.stopPropagation(); 
+            
             msgEl.classList.remove("failed");
-            newIcon.innerText = "🕒";
+            iconEl.innerText = "🕒";
+            
             emitMessageWithAck(payload);
-        });
+        },{once:true});
     }
 }
 
@@ -484,3 +498,9 @@ axios.interceptors.response.use(
         return Promise.reject(error);
     }
 );
+
+socket.on("NEW_CONVERSATION_CREATED",(payload)=>{
+    allConversations.unshift(payload);
+    notifyMap.set(payload._id, 0);
+    renderChatList(allConversations,notifyMap,selectedChatId,currentUser);
+})

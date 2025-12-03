@@ -1,4 +1,5 @@
-import { getAllConversations, allConversations, currentUser } from "./main.js";
+import { allConversations, currentUser, socket, notifyMap, selectedChatId } from "./main.js";
+import { renderChatList } from "./ui.js";
 
 const createNewChatBtn = document.querySelector('.add-user-btn');
 const modal = document.getElementById('addUserModal');
@@ -109,7 +110,17 @@ async function createConvo(user){
         const response = await axios.post(`http://localhost:8000/api/v1/conversation`, { "targetId": user._id }, { withCredentials: true })
 
         if (response.data.success) {
-            await getAllConversations(response.data.data._id);
+            const newChat = response.data.data; 
+
+            const exists = allConversations.some(c => c._id === newChat._id);
+
+            if (!exists) {
+                allConversations.unshift(newChat);
+                
+                renderChatList(allConversations,notifyMap, selectedChatId, currentUser);
+            }
+            socket.emit("New_Conversation", { conversationId: newChat._id });
+
             closeSearchModal();
         }
     } catch (error) {
