@@ -18,7 +18,8 @@ import {
     getLocalMessages, 
     saveMessages ,
     deleteMessage,
-    updateSingleConversation
+    updateSingleConversation,
+    updateMessageSeen
 } from './db.js';
 
 import { 
@@ -114,7 +115,7 @@ socket.on("NEW_MESSAGE", ({ message }) => {
     updateConversationList(message.conversationId, message.text, message.createdAt,senderId);
 });
 
-socket.on("MESSAGE_SEEN", ({ messageId, userId, name, seenAt }) => {
+socket.on("MESSAGE_SEEN", async({ messageId, userId, name, seenAt }) => {
     let msgEl = document.querySelector(`.message-wrapper[data-id="${messageId}"]`);
     
     console.log("frontend",msgEl);
@@ -131,7 +132,7 @@ socket.on("MESSAGE_SEEN", ({ messageId, userId, name, seenAt }) => {
                 if(icon) icon.innerHTML = "✔✔"; 
             }
             msgEl.setAttribute("data-seen", JSON.stringify(seenList));
-            
+            await updateMessageSeen(messageId, userId, name, seenAt);
             const modal = document.getElementById('seen-modal');
             if (modal && modal.style.display === "flex") {
                 refreshCurrentSeenModal();
@@ -175,8 +176,8 @@ export const handleOpenMessage =async (e) => {
     
     await loadMessages(convoId);
 
-    socket.emit("MESSAGES_SEEN", { conversationId:convoId });
-    console.log("after emmit");
+    // socket.emit("MESSAGES_SEEN", { conversationId:convoId });
+    // console.log("after emmit");
     
     // console.log("done");
     
@@ -287,15 +288,17 @@ async function loadMessages(conversationId) {
         const isStillSelected = selectedChatId && selectedChatId._id === conversationId;
         
         if (isStillSelected) {
-            messages = markMessagesAsSeenOptimistically(messages);
+            // messages = markMessagesAsSeenOptimistically(messages);
 
             renderMessages(messages, currentUser, participants);
             
-            if (messages.length > 0) {
-                axios.put(`${BASE_URL}/api/v1/messages/seen/${conversationId}`, {}, {
-                    withCredentials: true
-                }).catch(err => console.error("Failed to mark seen:", err));
-            }
+            // if (messages.length > 0) {
+            //     axios.put(`${BASE_URL}/api/v1/messages/seen/${conversationId}`, {}, {
+            //         withCredentials: true
+            //     }).catch(err => console.error("Failed to mark seen:", err));
+            // }
+
+            socket.emit("MESSAGES_SEEN", { conversationId });
         } 
         console.log("network load", messages);
         

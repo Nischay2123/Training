@@ -214,3 +214,35 @@ export async function updateSingleConversation(conversation) {
     });
 }
     
+export async function updateMessageSeen(messageId, userId, name, seenAt) {
+    const database = await getDB();
+
+    return new Promise((resolve, reject) => {
+        const transaction = database.transaction(["messages"], "readwrite");
+        const store = transaction.objectStore("messages");
+
+        const getReq = store.get(messageId);
+
+        getReq.onsuccess = (event) => {
+            const msg = event.target.result;
+
+            if (!msg) {
+                return resolve("Message not found in IDB");
+            }
+
+            if (!Array.isArray(msg.seen)) {
+                msg.seen = [];
+            }
+
+            const exists = msg.seen.some(s => String(s.userId) === String(userId));
+            if (!exists) {
+                msg.seen.push({ userId, name, seenAt });
+            }
+
+            store.put(msg);
+            resolve("Message seen updated");
+        };
+
+        getReq.onerror = (e) => reject(e.target.error);
+    });
+}
