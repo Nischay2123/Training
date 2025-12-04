@@ -47,6 +47,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     await getAllConversations();
 });
 
+// setInterval(()=>{
+//     console.log(socket.connected);
+    
+// },1000)
+
 socket.on("connect", async () => {
     console.log("✅ Connection restored! Starting Background Sync...");
 
@@ -90,7 +95,6 @@ socket.on("NEW_MESSAGE", ({ message }) => {
     if (senderId=== currentUser._id.toString()) return; 
     
     const msgConvoId = String(message.conversationId);
-    const openChatId = selectedChatId ? String(selectedChatId._id) : null;
     
     const isChatOpen = selectedChatId && selectedChatId._id === message.conversationId;
 
@@ -113,6 +117,7 @@ socket.on("NEW_MESSAGE", ({ message }) => {
 socket.on("MESSAGE_SEEN", ({ messageId, userId, name, seenAt }) => {
     let msgEl = document.querySelector(`.message-wrapper[data-id="${messageId}"]`);
     
+    console.log("frontend",msgEl);
     
     if (msgEl) {
         let seenList = JSON.parse(msgEl.getAttribute("data-seen") || "[]");
@@ -121,6 +126,10 @@ socket.on("MESSAGE_SEEN", ({ messageId, userId, name, seenAt }) => {
         
         if (!exists) {
             seenList.push({ userId, name, seenAt });
+            if (seenList.length==selectedChatId.participants.length) {
+                const icon = msgEl.querySelector(".msg-status-icon");
+                if(icon) icon.innerHTML = "✔✔"; 
+            }
             msgEl.setAttribute("data-seen", JSON.stringify(seenList));
             
             const modal = document.getElementById('seen-modal');
@@ -134,6 +143,8 @@ socket.on("MESSAGE_SEEN", ({ messageId, userId, name, seenAt }) => {
 chatContainer.addEventListener("click",(e)=>handleOpenMessage(e));
 
 export const handleOpenMessage =async (e) => {
+    console.log("opening messages");
+    
     targetUserProfileCleanUp();
     document.querySelector(".no-chat-placeholder").style.display="none";
     document.querySelector(".column-active-chat").style.display="flex";
@@ -160,8 +171,13 @@ export const handleOpenMessage =async (e) => {
     renderMessages([], currentUser, []);
 
     socket.emit("JOIN_CONVERSATION", { conversationId: convoId });
-
+    console.log("before emmit");
+    
     await loadMessages(convoId);
+
+    socket.emit("MESSAGES_SEEN", { conversationId:convoId });
+    console.log("after emmit");
+    
     // console.log("done");
     
 
@@ -286,12 +302,14 @@ async function loadMessages(conversationId) {
 
         if (messages.length > 0) await saveMessages(messages);
 
-    } catch (err) {
-        console.error("Error loading messages:", err);
+    } catch (error) {
+        console.error("Error loading messages:", error.response?error.response.data:error.message);
     }
 }
 
 async function handleSendMessage() {
+    console.log("sending messages");
+    
     const text = messageInput.value.trim();
     if (!text || !selectedChatId) return;
 
@@ -376,7 +394,7 @@ async function fetchOlderMessages() {
         if(olderMessages.length < 20) hasMoreMessages = false;
 
     } catch (error) {
-        console.error("History error:", error);
+        console.error("History error:", error.response?error.response.data:error.message);
     } finally {
         isLoadingHistory = false;
     }
@@ -384,7 +402,7 @@ async function fetchOlderMessages() {
 
 
 async function emitMessageWithAck(payload) {
-    if (socket.connected){
+    if (canSendNow()){
         const { _id, ...serverPayload } = payload;
 
         socket.timeout(5000).emit("SEND_MESSAGE", serverPayload, async (err, response) => {
@@ -399,13 +417,19 @@ async function emitMessageWithAck(payload) {
                 markMessageFailed(payload);
                 return;
             }
-
+            console.log("messages emmited, swaping with real id");
+            
             await swapTempForReal(payload._id, response.savedMessage);
         });
     }
-
-    
 }
+
+function canSendNow() {
+    return socket.connected &&
+           navigator.onLine &&
+           socket.io.engine.transport.readyState === "open";
+}
+
 
 async function swapTempForReal(tempId, realMessage) {
     await deleteMessage(tempId);        
@@ -422,7 +446,7 @@ async function swapTempForReal(tempId, realMessage) {
         msgElement.setAttribute("data-seen", serverSeenData);
 
         const icon = msgElement.querySelector(".msg-status-icon");
-        if(icon) icon.innerHTML = ""; 
+        if(icon) icon.innerHTML = "✔"; 
     }
 }
 

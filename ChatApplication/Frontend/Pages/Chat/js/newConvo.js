@@ -68,7 +68,7 @@ modalInput.addEventListener('input', (e) => {
                 renderUserList(newUsers);
             }
         } catch (error) {
-            console.error("Search Error:", error);
+            console.error("Search Error:", error.response?error.response.data:error.message);
         }
     }, 300); 
 });
@@ -124,7 +124,7 @@ async function createConvo(user){
             closeSearchModal();
         }
     } catch (error) {
-        console.error('Conversation creation failed:', error.message);
+        console.error('Conversation creation failed:', error.response?error.response.data:error.message);
     }
 }
 

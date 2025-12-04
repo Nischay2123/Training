@@ -63,7 +63,7 @@ finalizeGroupBtn.addEventListener("click", async () => {
             closeSearchModal();
         }
     } catch (error) {
-        console.error("Group creation failed:", error.response);
+        console.error("Group creation failed:", error.response?error.response.data:error.message);
         alert("Failed to create group. Please try again.");
     } finally {
         finalizeGroupBtn.disabled = false;

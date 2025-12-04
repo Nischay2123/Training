@@ -133,9 +133,10 @@ export function appendMessageToUI(msg, currentUser, participants) {
     const timeVal = new Date(msg.createdAt) ;
     const timeString = timeVal.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const isPending = msg._id && msg._id.toString().startsWith("temp_");
-    const statusHTML =  (isOutgoing && isPending) ? `<span class="msg-status-icon">🕒</span>` :"";
-                        // (isOutgoing && msg.seen.length==participants.length)?`<span class="msg-status-icon">✔</span>`:
-                        // `<span class="msg-status-icon">✔</span>`;
+    let statusHTML ;
+    if(isOutgoing && isPending) statusHTML= `<span class="msg-status-icon">🕒</span>` ;
+    else if (isOutgoing) statusHTML=msg.seen.length==participants.length?`<span class="msg-status-icon">✔✔</span>`:`<span class="msg-status-icon">✔</span>`;
+    else statusHTML="";
 
     messageWrapper.innerHTML = `
         ${nameHTML}

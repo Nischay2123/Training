@@ -140,6 +140,35 @@ export const initializeSocket = (server, corsOptions) => {
                 console.error("CRITICAL DB ERROR in MESSAGE_SEEN:", error);
             }
         });
+        socket.on("MESSAGES_SEEN", async ({ conversationId }) => {
+            try {
+                const userObjectId = new mongoose.Types.ObjectId(userId);
+
+                const unseenMessages = await Messages.find({
+                    conversationId,
+                    "seen.userId": { $ne: userObjectId }
+                });
+
+                for (const message of unseenMessages) {
+                    message.seen.push({
+                        userId: userObjectId,
+                        name: user.userName,
+                        seenAt: new Date()
+                    });
+                    await message.save();
+
+                    io.to(conversationId).emit("MESSAGE_SEEN", {
+                        messageId: message._id,
+                        userId,
+                        name: user.userName,
+                        seenAt: new Date()
+                    });
+                }
+            } catch (err) {
+                console.error("ERROR marking multiple messages as seen:", err);
+            }
+        });
+
         socket.on("New_Conversation",async({conversationId})=>{
             try {
                 const conversation = await Conversations.findById(conversationId).populate("participants.userId", "firstName lastName userName photo email") ;

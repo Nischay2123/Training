@@ -77,7 +77,7 @@ logOut.addEventListener("click",async(e)=>{
         alert("Logged out successfully");
         window.location.href="http://localhost:5500/ChatApplication/Frontend/Pages/Login/login.html";
     } catch (error) {
-        console.log("Error while logout outside: ",error.message);
+        console.log("Error while logout outside: ",error.response?error.response.data:error.message);
         
     }
 })
@@ -131,7 +131,7 @@ if (profileInput) {
                 alert("Profile photo updated successfully!");
             }
         } catch (error) {
-            console.error("Upload Error:", error);
+            console.error("Upload Error:", error.response?error.response.data:error.message);
             alert("Failed to upload image. Please try again.");
             
             uploadBtn.innerText = "Upload Profile Image";
