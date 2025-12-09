@@ -1,35 +1,24 @@
 import { Server } from "socket.io";
-import { socketAuthenticator } from "../middlerwares/auth.middleware.js"; 
-import Messages from "../models/Message.model.js"; 
+import Messages from "../models/Message.model.js";
 import Conversations from "../models/Conversation.model.js";
 import mongoose from "mongoose";
+import { publishMessage, publishSeen } from "./polling.js";
+
 
 const userSocketIDs = new Map();
 
 export const initializeSocket = (server, corsOptions) => {
-    const io = new Server(server, {
-        cors: corsOptions
-    });
+    const io = new Server(server, { cors: corsOptions });
 
-    io.use(async(socket, next) => {
-        await socketAuthenticator(socket, next);
-    });
-    
-    io.on("connection", (socket) => {
-        const user = socket.user;
+    io.on("connection", async (socket) => {
+
+        const user = socket.handshake.auth?.user;
+        if (!user) return socket.disconnect();
+
         const userId = user._id.toString();
 
         userSocketIDs.set(userId, socket.id);
         socket.join(userId);
-        // const getSocketIds = (members) => {
-        //     if (!members || !Array.isArray(members)) return [];
-        //     return members
-        //         .map((member) => {
-        //             const id = member._id ? member._id.toString() : member.toString();
-        //             return userSocketIDs.get(id);
-        //         })
-        //         .filter((socketId) => socketId);
-        // };
 
         socket.on("JOIN_CONVERSATION", ({ conversationId }) => {
             socket.join(conversationId);
@@ -37,21 +26,18 @@ export const initializeSocket = (server, corsOptions) => {
 
         socket.on("SEND_MESSAGE", async ({ conversationId, text, members, tempId }, callback) => {
             try {
-                const existingMessage = await Messages.findOne({ tempId: tempId });
 
-                if (existingMessage) {
-                    console.log(`Duplicate detected (${tempId}). Returning existing message.`);
-                    if (callback) {
-                        callback({
-                            success: true,
-                            serverId: existingMessage._id,
-                            savedMessage: existingMessage
-                        });
-                    }
-                    return;
+
+                const duplicate = await Messages.findOne({ tempId });
+                if (duplicate) {
+                    return callback?.({
+                        success: true,
+                        serverId: duplicate._id,
+                        savedMessage: duplicate
+                    });
                 }
 
-                const explicitTime = new Date();
+                const now = new Date();
 
                 const savedMessage = await Messages.create({
                     conversationId,
@@ -59,162 +45,157 @@ export const initializeSocket = (server, corsOptions) => {
                     sender: userId,
                     tempId,
                     seen: [{
-                        userId: userId,
+                        userId,
                         name: user.userName,
-                        seenAt:explicitTime
+                        seenAt: now
                     }],
-                    createdAt: explicitTime,
-                    updatedAt: explicitTime,
+                    createdAt: now,
+                    updatedAt: now,
                 });
 
                 await Conversations.findByIdAndUpdate(
                     conversationId,
                     {
                         lastMessage: {
-                            text,
-                            sender: userId,
-                            createdAt: explicitTime,
-                            updatedAt: explicitTime
+                        text,
+                        sender: userId,
+                        createdAt: now,
+                        updatedAt: now
                         },
-                        updatedAt: explicitTime
-                    },
-                    { new: true }
+                        $inc: { unreadCount: 1 },
+                        updatedAt: now
+                    }
                 );
 
-                members.forEach((memberId) => {
-                    const memberRoom = memberId.toString();
-                    io.to(memberRoom).emit("NEW_MESSAGE", {
+
+                for (const memberId of members) {
+                    // console.log(memberId);
+                    
+                    io.to(memberId.toString()).emit("NEW_MESSAGE", {
                         tempId,
                         message: savedMessage
                     });
+                }
+                publishMessage(conversationId, savedMessage);
+
+                callback?.({
+                    success: true,
+                    serverId: savedMessage._id,
+                    savedMessage
                 });
 
-                if (callback) {
-                    callback({
-                        success: true,
-                        serverId: savedMessage._id,
-                        savedMessage: savedMessage
-                    });
-                }
-
             } catch (error) {
-                console.error("DB Error:", error);
-                if (callback) callback({ success: false, error: error.message });
+                console.error(error);
+                callback?.({ success: false, error: error.message });
             }
         });
 
         socket.on("MESSAGE_SEEN", async ({ conversationId, messageId }) => {
             try {
-                const userObjectId = new mongoose.Types.ObjectId(String(userId));
+                const userObjectId = new mongoose.Types.ObjectId(userId);
+                const now = new Date();
 
-                const updatedMessage = await Messages.findOneAndUpdate(
-                    {
-                        _id: messageId,
-                        "seen.userId": { $ne: userObjectId }
-                    },
-                    {
-                        $push: {
-                            seen: {
-                                userId: userObjectId,
-                                name: user.userName,
-                                seenAt: new Date(),
-                            },
-                        },
-                    },
+                const updated = await Messages.findOneAndUpdate(
+                    { _id: messageId, "seen.userId": { $ne: userObjectId } },
+                    { $push: { seen: { userId: userObjectId, name: user.userName, seenAt: now } } },
                     { new: true }
                 );
 
-                if (updatedMessage) {
-                    const seenEntry = updatedMessage.seen.find(
-                        (s) => s.userId.toString() === userId.toString()
-                    );
-
+                if (updated) {
                     io.to(conversationId).emit("MESSAGE_SEEN", {
                         messageId,
                         userId,
                         name: user.userName,
-                        seenAt: seenEntry ? seenEntry.seenAt : new Date()
+                        seenAt: now
+                    });
+                    publishSeen(conversationId, {
+                      messageIds:[messageId],
+                      userId,
+                      name: user.userName,
+                      seenAt: now
                     });
                 }
-            } catch (error) {
-                console.error("CRITICAL DB ERROR in MESSAGE_SEEN:", error);
+
+            } catch (err) {
+                console.error("MESSAGE_SEEN ERROR", err);
             }
         });
+
+
+
         socket.on("MESSAGES_SEEN", async ({ conversationId }) => {
             try {
                 const userObjectId = new mongoose.Types.ObjectId(userId);
+                const now = new Date();
 
-                const unseenMessages = await Messages.find({
-                    conversationId,
-                    "seen.userId": { $ne: userObjectId }
-                });
+                const unseenIds = await Messages.find(
+                    { conversationId, "seen.userId": { $ne: userObjectId } },
+                    { _id: 1 }
+                ).lean();
 
-                for (const message of unseenMessages) {
-                    message.seen.push({
-                        userId: userObjectId,
-                        name: user.userName,
-                        seenAt: new Date()
-                    });
-                    await message.save();
+                if (unseenIds.length === 0) return;
 
+                const ids = unseenIds.map(m => m._id);
+
+                await Messages.updateMany(
+                    { _id: { $in: ids } },
+                    {
+                        $push: {
+                            seen: { userId: userObjectId, name: user.userName, seenAt: now }
+                        }
+                    }
+                );
+                ids.forEach(id => {
                     io.to(conversationId).emit("MESSAGE_SEEN", {
-                        messageId: message._id,
+                        messageId: id,
                         userId,
                         name: user.userName,
-                        seenAt: new Date()
+                        seenAt: now
                     });
-                }
+                });
+
+
             } catch (err) {
-                console.error("ERROR marking multiple messages as seen:", err);
+                console.error("MESSAGES_SEEN ERROR", err);
             }
         });
 
-        socket.on("New_Conversation",async({conversationId})=>{
+        socket.on("New_Conversation", async ({ conversationId }) => {
             try {
-                const conversation = await Conversations.findById(conversationId).populate("participants.userId", "firstName lastName userName photo email") ;
-            
-                if (conversation) {
-                    const convoObj=conversation.toObject();
-                    const formattedParticipants = convoObj.participants.map((p) => {
-                        
-                        const userDetails = p.userId || {}; 
-                        
-                        return {
-                            _id: userDetails._id,             
-                            firstName: userDetails.firstName, 
-                            lastName: userDetails.lastName,
-                            email: userDetails.email,
-                            userName: userDetails.userName,
-                            name: userDetails.name, 
-                            photo: userDetails.photo 
-                        };
-                    });
-            
-            
-                    const payload= {
-                        ...convoObj,
-                        participants: formattedParticipants, 
-                        unreadCount: 0
-                    };
-                    const currentUserId = socket.user._id.toString(); 
+                const convo = await Conversations.findById(conversationId)
+                    .populate("participants", "firstName lastName userName photo email");
 
-                    formattedParticipants.forEach((participant) => {
-                        const participantId = participant._id.toString();
+                if (!convo) return;
 
-                        if (participantId !== currentUserId) {
-                            
-                            const receiverSocketId = userSocketIDs.get(participantId);
+                const convoObj = convo.toObject();
 
-                            if (receiverSocketId) {
-                                io.to(receiverSocketId).emit("NEW_CONVERSATION_CREATED", payload);
-                            }
-                        }
-                    });
-                }
-            } catch (error) {
-                console.error("error in backend socket in new conversation:", error);
+                const formattedParticipants = convoObj.participants.map(user => ({
+                    _id: user._id,
+                    firstName: user.firstName,
+                    lastName: user.lastName,
+                    email: user.email,
+                    userName: user.userName,
+                    photo: user.photo
+                }));
+
+                const payload = {
+                    ...convoObj,
+                    participants: convo.participants,
+                    unreadCount: 0
+                };
+
+                formattedParticipants.forEach(member => {
+                    if (member._id.toString() !== userId) {
+                        const socketId = userSocketIDs.get(member._id.toString());
+                        if (socketId) io.to(socketId).emit("NEW_CONVERSATION_CREATED", payload);
+                    }
+                });
+
+            } catch (err) {
+                console.error("NEW_CONVERSATION ERROR", err);
             }
-        })
+        });
+
         socket.on("disconnect", () => {
             userSocketIDs.delete(userId);
         });
@@ -223,6 +204,6 @@ export const initializeSocket = (server, corsOptions) => {
     return io;
 };
 
-export const getReceiverSocketId = (receiverId) => {
-    return userSocketIDs.get(receiverId);
-};
+export const getReceiverSocketId = id => userSocketIDs.get(id);
+
+

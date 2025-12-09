@@ -14,10 +14,10 @@
         <!-- COLUMN 1: Sleek Navigation (Sidebar) -->
         <nav class="column-nav">
             <div class="nav-top">
-                <button class="nav-btn chats-btn">Chats</button>
                 <button class="nav-btn profile-btn">
-                    Profile
+                    <img src="default-avtar.png" alt="" class="profile-image-btn">
                 </button>
+                <button class="nav-btn chats-btn">Chats</button>
                 <button class="nav-btn add-user-btn">
                     +
                 </button>
@@ -26,7 +26,6 @@
                 </button>
             </div>
 
-            
         </nav>
 
         <!-- COLUMN 2: Chat List -->
@@ -155,9 +154,9 @@
 
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-
-    <script type="module" src="js/main.js"></script>
-    <script defer type="module" src="js/newConvo.js"></script>
-    <script defer type="module" src="js/createGroup.js"></script>
+    <script defer type="module" src="../Chat/js/app/axios.js"></script>
+    <script type="module" src="../Chat/js/app/main.js"></script>
+    <script defer type="module" src="../Chat/js/features/newConvo.js"></script>
+    <script defer type="module" src="../Chat/js/features/createGroup.js"></script>
 </body>
 </html>

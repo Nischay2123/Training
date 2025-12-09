@@ -1,5 +1,6 @@
-import { allConversations, currentUser, notifyMap, selectedChatId, socket } from "./main.js";
-import { renderChatList } from "./ui.js";
+import api from "../app/axios.js";
+import { allConversations, BASE_URL, currentUser, notifyMap, selecteChatObj, socket } from "../app/main.js";
+import { renderChatList } from "../ui/ui.js";
 
 const createGroupBtn = document.querySelector(".create-group-btn");
 const modal = document.getElementById('addNewGroup');
@@ -46,7 +47,7 @@ finalizeGroupBtn.addEventListener("click", async () => {
     };
 
     try {
-        const response = await axios.post(`http://localhost:8000/api/v1/conversation/group`, payload, { withCredentials: true });
+        const response = await api.post(`http://localhost:8000/api/v1/conversation/group`, payload, { withCredentials: true });
         
         if(response.data.success) {
             const newChat = response.data.data; 
@@ -54,9 +55,13 @@ finalizeGroupBtn.addEventListener("click", async () => {
             const exists = allConversations.some(c => c._id === newChat._id);
 
             if (!exists) {
+                console.log(newChat);
+                console.log("all coonvo", allConversations);
+                
+                
                 allConversations.unshift(newChat);
                 
-                renderChatList(allConversations, notifyMap, selectedChatId, currentUser);
+                renderChatList(allConversations, notifyMap, selecteChatObj, currentUser);
             }
             socket.emit("New_Conversation", { conversationId: newChat._id });
 
@@ -178,36 +183,6 @@ function renderUserList(users) {
 
     searchResultsList.appendChild(fragment);
 }
-
-axios.interceptors.response.use(
-    (response) => { 
-        return response;
-    }, 
-    async (error) => {
-        const originalRequest = error.config;
-        
-        if (error.response?.status === 401 && !originalRequest._retry) {
-            originalRequest._retry = true; 
-            console.log('🔄 Access Token expired. Attempting refresh...');
-            
-            try {
-                const refreshUrl = `${BASE_URL}/api/v1/users/refresh-token`;
-                
-                await axios.post(refreshUrl, {}, { withCredentials: true });
-                
-                console.log('✅ Refresh successful. Retrying original request.');
-
-                return axios(originalRequest);
-
-            } catch (refreshError) {
-                console.error("❌ Refresh failed. Logging out...", refreshError);
-                window.location.href="/ChatApplication/Frontend/Pages/Login/login.html";
-                return Promise.reject(refreshError);
-            }
-        }
-        return Promise.reject(error);
-    }
-);
 
 export function openGroupModal(e,selectedChat){
     e.preventDefault();

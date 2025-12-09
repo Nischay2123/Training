@@ -1,6 +1,7 @@
 
-import { currentUser } from "./main.js";
-import { getTargetUser } from "./ui.js";
+import api from "../app/axios.js";
+import {  currentUser } from "../app/main.js";
+import { getTargetUser } from "../ui/ui.js";
 
 const profile =document.querySelector(".column-profile");
 const image = document.querySelector(".profile-image");
@@ -15,7 +16,7 @@ const messageCol = document.querySelector(".column-active-chat")
 
 
 
-export function targetUserProfile(e,selectedChatId) {
+export function targetUserProfile(e,selecteChatObj) {
     e.preventDefault(); 
     
     const isMobile = window.matchMedia("(max-width: 425px)").matches;
@@ -28,7 +29,7 @@ export function targetUserProfile(e,selectedChatId) {
         else messageCol.style.display=messageCol.style.display==="none"?"flex":"none";
     }
     profile.style.display=profile.style.display == "flex"?"none":"flex";
-    const isCurrentUser =selectedChatId._id==currentUser._id 
+    const isCurrentUser =selecteChatObj._id==currentUser._id 
     // console.log(isCurrentUser);
     
     let targetUser ;
@@ -39,7 +40,7 @@ export function targetUserProfile(e,selectedChatId) {
             fullName:currentUser.fullName,
             email:currentUser.email
         }
-    }else targetUser= getTargetUser(selectedChatId, currentUser);
+    }else targetUser= getTargetUser(selecteChatObj, currentUser);
     // console.log(isCurrentUser,  targetUser);
 
 
@@ -67,7 +68,7 @@ logOut.addEventListener("click",async(e)=>{
         return;
     }
     try {
-        const response = await axios.post(`http://localhost:8000/api/v1/users/logout`,{},{
+        const response = await api.post(`http://localhost:8000/api/v1/users/logout`,{},{
             withCredentials: true
         });
         if (!response.data.success) {
@@ -75,6 +76,8 @@ logOut.addEventListener("click",async(e)=>{
             return;
         }
         alert("Logged out successfully");
+        window.localStorage.removeItem("selectedChatId");
+        window.localStorage.removeItem("user");
         window.location.href="http://localhost:5500/ChatApplication/Frontend/Pages/Login/login.html";
     } catch (error) {
         console.log("Error while logout outside: ",error.response?error.response.data:error.message);
@@ -107,7 +110,7 @@ if (profileInput) {
         uploadBtn.disabled = true;
 
         try {
-            const response = await axios.put('http://localhost:8000/api/v1/users/userUpdate', formData, {
+            const response = await api.put('http://localhost:8000/api/v1/users/userUpdate', formData, {
                 headers: {
                     'Content-Type': 'multipart/form-data'
                 },
@@ -139,36 +142,6 @@ if (profileInput) {
         }
     });
 }
-
-axios.interceptors.response.use(
-    (response) => { 
-        return response;
-    }, 
-    async (error) => {
-        const originalRequest = error.config;
-        
-        if (error.response?.status === 401 && !originalRequest._retry) {
-            originalRequest._retry = true; 
-            console.log('🔄 Access Token expired. Attempting refresh...');
-            
-            try {
-                const refreshUrl = `${BASE_URL}/api/v1/users/refresh-token`;
-                
-                await axios.post(refreshUrl, {}, { withCredentials: true });
-                
-                console.log('✅ Refresh successful. Retrying original request.');
-
-                return axios(originalRequest);
-
-            } catch (refreshError) {
-                console.error("❌ Refresh failed. Logging out...", refreshError);
-                window.location.href="/ChatApplication/Frontend/Pages/Login/login.html";
-                return Promise.reject(refreshError);
-            }
-        }
-        return Promise.reject(error);
-    }
-);
 
 const chatBtn = document.querySelector(".chats-btn")
 

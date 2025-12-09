@@ -1,5 +1,6 @@
-import { allConversations, currentUser, socket, notifyMap, selectedChatId } from "./main.js";
-import { renderChatList } from "./ui.js";
+import api from "../app/axios.js";
+import { allConversations, currentUser, socket, notifyMap, selecteChatObj, BASE_URL } from "../app/main.js";
+import { renderChatList } from "../ui/ui.js";
 
 const createNewChatBtn = document.querySelector('.add-user-btn');
 const modal = document.getElementById('addUserModal');
@@ -45,7 +46,7 @@ modalInput.addEventListener('input', (e) => {
 
     searchTimeout = setTimeout(async () => {
         try {
-            const response = await axios.get(`http://localhost:8000/api/v1/users/?userName=${query}`, { withCredentials: true });
+            const response = await api.get(`http://localhost:8000/api/v1/users/?userName=${query}`, { withCredentials: true });
             
             if (response.data && response.data.data) {
                 const currentUserIdStr = currentUser._id.toString();
@@ -107,7 +108,7 @@ function renderUserList(users) {
 
 async function createConvo(user){
     try {
-        const response = await axios.post(`http://localhost:8000/api/v1/conversation`, { "targetId": user._id }, { withCredentials: true })
+        const response = await api.post(`http://localhost:8000/api/v1/conversation`, { "targetId": user._id }, { withCredentials: true })
 
         if (response.data.success) {
             const newChat = response.data.data; 
@@ -117,7 +118,7 @@ async function createConvo(user){
             if (!exists) {
                 allConversations.unshift(newChat);
                 
-                renderChatList(allConversations,notifyMap, selectedChatId, currentUser);
+                renderChatList(allConversations,notifyMap, selecteChatObj, currentUser);
             }
             socket.emit("New_Conversation", { conversationId: newChat._id });
 
@@ -128,32 +129,32 @@ async function createConvo(user){
     }
 }
 
-axios.interceptors.response.use(
-    (response) => { 
-        return response;
-    }, 
-    async (error) => {
-        const originalRequest = error.config;
+
+//     (response) => { 
+//         return response;
+//     }, 
+//     async (error) => {
+//         const originalRequest = error.config;
         
-        if (error.response?.status === 401 && !originalRequest._retry) {
-            originalRequest._retry = true; 
-            console.log('🔄 Access Token expired. Attempting refresh...');
+//         if (error.response?.status === 401 && !originalRequest._retry) {
+//             originalRequest._retry = true; 
+//             console.log('🔄 Access Token expired. Attempting refresh...');
             
-            try {
-                const refreshUrl = `${BASE_URL}/api/v1/users/refresh-token`;
+//             try {
+//                 const refreshUrl = `${BASE_URL}/api/v1/users/refresh-token`;
                 
-                await axios.post(refreshUrl, {}, { withCredentials: true });
+//                 await axios.post(refreshUrl, {}, { withCredentials: true });
                 
-                console.log('✅ Refresh successful. Retrying original request.');
+//                 console.log('✅ Refresh successful. Retrying original request.');
 
-                return axios(originalRequest);
+//                 return axios(originalRequest);
 
-            } catch (refreshError) {
-                console.error("❌ Refresh failed. Logging out...", refreshError);
-                window.location.href="/ChatApplication/Frontend/Pages/Login/login.html";
-                return Promise.reject(refreshError);
-            }
-        }
-        return Promise.reject(error);
-    }
-);
+//             } catch (refreshError) {
+//                 console.error("❌ Refresh failed. Logging out...", refreshError);
+//                 // window.location.href="/ChatApplication/Frontend/Pages/Login/login.html";
+//                 return Promise.reject(refreshError);
+//             }
+//         }
+//         return Promise.reject(error);
+//     }
+// );
