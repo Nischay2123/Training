@@ -7,7 +7,7 @@ import {asyncHandler} from "../utils/asyncHandler.js"
 import { generateAccessAndRefernceToken } from "../utils/token.js";
 import jwt from "jsonwebtoken";
 
-
+// to register on the application as user 
 export const registerUser = asyncHandler(async(req, res) => {
     const { firstName, lastName, userName, email, password } = req.body;
 
@@ -57,6 +57,8 @@ export const registerUser = asyncHandler(async(req, res) => {
     );
 });
 
+
+// to login as user 
 export const loginUser = asyncHandler(async(req,res)=>{
     const {email,password} = req.body;
 
@@ -81,7 +83,8 @@ export const loginUser = asyncHandler(async(req,res)=>{
 
     user.password="";
     user.refreshToken="";
-
+    console.log("refresh token in login: ",refreshToken);
+    
     const options = {
         httpOnly: true,
         secure: false
@@ -92,7 +95,7 @@ export const loginUser = asyncHandler(async(req,res)=>{
     return res.status(200).cookie("accessToken",accessToken,options).cookie("refreshToken",refreshToken,options).json(new ApiResoponse(200,JSON.stringify(sendPayload),"User loggedin successfully"))
 })
 
-
+//  to logout as user
 export const logoutUser = asyncHandler(async(req,res)=>{
     const id = req.user._id ;
     console.log(id);
@@ -116,6 +119,8 @@ export const logoutUser = asyncHandler(async(req,res)=>{
     return res.status(200).clearCookie("accessToken",options).clearCookie("refreshToken",options).json(new ApiResoponse(200,{},"user logged out"))
 })
 
+
+//  to refresh token (redundant or not used as done in auth middleware)
 export const refreshAccessToken = asyncHandler(async(req,res)=>{
     const incomingRefreshToken = req.cookies.refreshToken;
     if (!incomingRefreshToken) throw new ApiError(401,"Unauthorized Request")
@@ -143,6 +148,8 @@ export const refreshAccessToken = asyncHandler(async(req,res)=>{
     )
 })
 
+
+// to get the user to start a new chat
 export const getUser = asyncHandler(async(req,res)=>{
     const {userName} = req.query;
 
@@ -162,48 +169,52 @@ export const getUser = asyncHandler(async(req,res)=>{
 })
 
 
+// to get the user which are not present in the group and has one-to-one covnvo with user
 export const getAvailableUsersForGroup = asyncHandler(async (req, res) => {
     const currentUserId = req.user._id;
     const { groupId } = req.params;
 
-    console.log(groupId);
-    
+    const group = await Conversations.findById(groupId);
+    if (!group) throw new ApiError(404, "Group not found");
 
-    const groupChat = await Conversations.findById(groupId);
-    if (!groupChat) {
-        throw new ApiError(404, "Group conversation not found");
-    }
-    const existingMemberIds = groupChat.participants.map((p) => p.userId.toString());
-    
+    const existingMemberIds = new Set(group.participants.map(id => id.toString()));
 
-    const chats = await Conversations.find({
-        "participants.userId": currentUserId,
-        "participants": { $size: 2 } 
+    const directChats = await Conversations.find({
+        "participants": { $all: [currentUserId] },   
+        "participants": { $size: 2 },               
+        name: "One-to-One"
     }).select("participants");
 
-    const availableUsers = chats
-        .map((chat) => {
-            const friend = chat.participants.find(
-                (p) => p.userId !== currentUserId
-            );
-            
-            return friend ? {
-                _id: friend.userId,
-                name: friend.name,
-                photo: friend.photo
-            } : null;
-        })
-        .filter((friend) => {
-            if (!friend) return false;
-            return !existingMemberIds.includes(friend._id.toString());
+    let friendIds = [];
+
+    directChats.forEach(chat => {
+        chat.participants.forEach(id => {
+            const idStr = id.toString();
+            if (idStr !== currentUserId.toString()) {
+                friendIds.push(idStr);
+            }
         });
+    });
+
+    friendIds = [...new Set(friendIds)];
+
+    const finalIds = friendIds.filter(id => !existingMemberIds.has(id));
+
+    if (finalIds.length === 0) {
+        return res.status(200).json(
+            new ApiResoponse(200, [], "No available users")
+        );
+    }
+
+    const availableUsers = await Users.find({ _id: { $in: finalIds } })
+        .select("firstName lastName userName photo email");
 
     return res.status(200).json(
         new ApiResoponse(200, availableUsers, "Available users retrieved successfully")
     );
 });
 
-
+// to update the profile picture of the user 
 export const updateUser = asyncHandler(async(req,res)=>{
     const id = req.user._id ;
     let photoUrl = null; 

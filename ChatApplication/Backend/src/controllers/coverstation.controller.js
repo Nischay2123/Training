@@ -1,194 +1,89 @@
 import {asyncHandler} from "../utils/asyncHandler.js"
 import Conversations from "../models/Conversation.model.js"
-import Users from "../models/User.model.js"
 import Messages from "../models/Message.model.js"
 import {ApiResoponse }from "../utils/ApiResponse.js"
 import {ApiError} from "../utils/ApiError.js"
 
-export const getChat = asyncHandler(async(req, res) => {
+
+// to get or create a new one-to-one convo
+export const getChat = asyncHandler(async (req, res) => {
     const { targetId } = req.body;
-    
     const userId = req.user._id;
 
-    const conversation = await Conversations.findOne({
-        $and: [
-            { "participants.userId": { $all: [userId, targetId] } },
-            { "participants": { $size: 2 } }
-        ]
-    }).populate("participants.userId", "firstName lastName userName photo email") ;
-
-    
+    let conversation = await Conversations.findOne({
+        participants: { $all: [userId, targetId] },
+        name: "One-to-One"
+    }).populate("participants", "firstName lastName userName photo email");
 
     if (conversation) {
-        const convoObj=conversation.toObject();
-        const formattedParticipants = convoObj.participants.map((p) => {
-            
-            const userDetails = p.userId || {}; 
-            
-            return {
-                _id: userDetails._id,             
-                firstName: userDetails.firstName, 
-                lastName: userDetails.lastName,
-                email: userDetails.email,
-                userName: userDetails.userName,
-                name: userDetails.name, 
-                photo: userDetails.photo 
-            };
-        });
-
         const unreadCount = await Messages.countDocuments({
-            conversationId: convo._id,
-            sender: { $ne: currentUserId }, 
-            "seen.userId": { $ne: currentUserId }
+            conversationId: conversation._id,
+            sender: { $ne: userId },
+            "seen.userId": { $ne: userId }
         });
 
-        const payload= {
-            ...convoObj,
-            participants: formattedParticipants, 
-            unreadCount: unreadCount
-        };
         return res.status(200).json(
-            new ApiResoponse(200, payload, "Conversation already exists")
+            new ApiResoponse(200, { ...conversation.toObject(), unreadCount }, "Conversation already exists")
         );
     }
 
-    const targetUser = await Users.findById(targetId);
-    if (!targetUser) throw new ApiError(401, "User not found");
-
-    const participants = [
-        {
-            userId,
-            photo: req.user.photo,
-            name: req.user.userName
-        },
-        {
-            userId: targetUser._id,
-            photo: targetUser.photo,
-            name: targetUser.userName
-        }
-    ];
-
-    const newConverstion = await Conversations.create({
-        participants: participants,
+    const newChat = await Conversations.create({
+        participants: [userId, targetId],
+        name: "One-to-One"
     });
 
-    const populatedConversation = await Conversations.findById(newConverstion._id)
-        .populate("participants.userId", "firstName lastName userName photo email");
+    const populated = await Conversations.findById(newChat._id)
+        .populate("participants", "firstName lastName userName photo email");
 
-    if (!populatedConversation) {
-        throw new ApiError(500, "Failed to create conversation");
-    }
-
-    const convoObj = populatedConversation.toObject();
-    const formattedParticipants = convoObj.participants.map((p) => {
-        const userDetails = p.userId || {};
-        return {
-            _id: userDetails._id,
-            firstName: userDetails.firstName,
-            lastName: userDetails.lastName,
-            email: userDetails.email,
-            userName: userDetails.userName,
-            name: userDetails.userName, 
-            photo: userDetails.photo
-        };
-    });
-
-    convoObj.participants = formattedParticipants;
-
-    return res.status(201).json(new ApiResoponse(201, convoObj, "Conversation Created"));
+    return res.status(201).json(
+        new ApiResoponse(201, populated, "Conversation created")
+    );
 });
 
-
+// to get the user all conversations
 export const getAllConversations = asyncHandler(async (req, res) => {
-    const currentUserId = req.user._id;
+    const userId = req.user._id;
 
     const conversations = await Conversations.find({
-        "participants.userId": currentUserId
-    })
-    .populate("participants.userId", "firstName lastName userName photo email") 
-    .sort({ updatedAt: -1 });
+        participants: userId
+    }).populate("participants", "firstName lastName userName photo email").sort({ updatedAt: -1 });
 
-    if (!conversations || conversations.length === 0) {
-        return res.status(200).json(new ApiResoponse(200, [], "No conversations found"));
-    }
-
-    const conversationsWithCount = await Promise.all(
-        conversations.map(async (convo) => {
-            const convoObj = convo.toObject(); 
-            const formattedParticipants = convoObj.participants.map((p) => {
-                
-                const userDetails = p.userId || {}; 
-                
-                return {
-                    _id: userDetails._id,             
-                    firstName: userDetails.firstName, 
-                    lastName: userDetails.lastName,
-                    email: userDetails.email,
-                    userName: userDetails.userName,
-                    name: userDetails.name, 
-                    photo: userDetails.photo 
-                };
-            });
-
-            const unreadCount = await Messages.countDocuments({
+    const withUnread = await Promise.all(
+        conversations.map(async convo => {
+            const unread = await Messages.countDocuments({
                 conversationId: convo._id,
-                sender: { $ne: currentUserId }, 
-                "seen.userId": { $ne: currentUserId }
+                sender: { $ne: userId },
+                "seen.userId": { $ne: userId }
             });
 
-            return {
-                ...convoObj,
-                participants: formattedParticipants, 
-                unreadCount: unreadCount
-            };
+            return { ...convo.toObject(), unreadCount: unread };
         })
     );
 
     return res.status(200).json(
-        new ApiResoponse(200, conversationsWithCount, "Conversations retrieved successfully")
+        new ApiResoponse(200, withUnread, "Conversations fetched")
     );
 });
 
+// to create new group 
 export const createGroup = asyncHandler(async (req, res) => {
-    const { name, participants } = req.body; 
-
-    if (!name || name.trim() === "") {
-        throw new ApiError(400, "Group name is required");
-    }
-    
-    if (!participants || !Array.isArray(participants) || participants.length === 0) {
-        throw new ApiError(400, "At least one participant is required to form a group");
-    }
-
-    const members = await Users.find({ 
-        _id: { $in: participants } 
-    }).select("userName photo _id");
-
-
-    const formattedParticipants = members.map((member) => ({
-        userId: member._id,
-        name: member.userName, 
-        photo: member.photo
-    }));
-
-    formattedParticipants.unshift({
-        userId: req.user._id,
-        name: req.user.userName,
-        photo: req.user.photo
-    });
+    const { name, participants } = req.body;
 
     const newGroup = await Conversations.create({
-        name: name,
+        name,
         admin: req.user._id,
-        participants: formattedParticipants,
+        participants: [req.user._id, ...participants]
     });
 
+    const populated = await Conversations.findById(newGroup._id)
+        .populate("participants", "firstName lastName userName photo email");
+
     return res.status(201).json(
-        new ApiResoponse(201, newGroup, "Group created successfully")
+        new ApiResoponse(201, populated, "Group created")
     );
 });
 
-
+// to get the user's all group 
 export const getAllGroups = asyncHandler(async (req, res) => {
     const currentUserId = req.user._id;
 
@@ -211,7 +106,7 @@ export const getAllGroups = asyncHandler(async (req, res) => {
     );
 });
 
-
+// to search a group by name (not used)
 export const getGroupByName = asyncHandler(async (req, res) => {
     const { name } = req.query;
 
@@ -250,67 +145,63 @@ export const getGroupByName = asyncHandler(async (req, res) => {
     );
 });
 
+// to add the member in the group (only admin is allowed , not used)
 export const addMembersToGroup = asyncHandler(async (req, res) => {
-    const { newMemberIds } = req.body; 
-    const group = req.group; 
+    const { newMemberIds } = req.body;
+    const group = req.group;
 
     if (!newMemberIds || !Array.isArray(newMemberIds) || newMemberIds.length === 0) {
         throw new ApiError(400, "Please provide valid member IDs to add");
     }
 
-    const newMembers = await Users.find({ _id: { $in: newMemberIds } }).select("userName photo _id");
-    console.log(newMembers);
-    
+    const existingIds = new Set(group.participants.map(id => id.toString()));
 
-    if (newMembers.length === 0) throw new ApiError(400, "Users not found");
+    const validToAdd = newMemberIds.filter(id => !existingIds.has(id));
 
-    const existingIds = group.participants.map(p => p.userId.toString());
-    
-    const validNewMembers = newMembers.filter(
-        user => !existingIds.includes(user._id.toString())
-    );
-
-    if (validNewMembers.length === 0) {
+    if (validToAdd.length === 0) {
         throw new ApiError(400, "All selected users are already in the group");
     }
 
-    const membersToAdd = validNewMembers.map(user => ({
-        userId: user._id,
-        name: user.userName,
-        photo: user.photo
-    }));
+    group.participants.push(...validToAdd);
 
-    group.participants.push(...membersToAdd);
-    await group.save(); 
+    await group.save();
+
+    const populated = await Conversations.findById(group._id)
+        .populate("participants", "firstName lastName userName photo email");
 
     return res.status(200).json(
-        new ApiResoponse(200, group, "Members added successfully")
+        new ApiResoponse(200, populated, "Members added successfully")
     );
 });
 
-
+// to remove the member (only admin is allowed, not used)
 export const removeMemberFromGroup = asyncHandler(async (req, res) => {
     const { memberIdToRemove } = req.body;
-    const group = req.group; 
+    const group = req.group;
 
-    if (memberIdToRemove === req.user._id.toString()) {
+    if (!memberIdToRemove) {
+        throw new ApiError(400, "Member ID is required");
+    }
+
+    if (memberIdToRemove.toString() === req.user._id.toString()) {
         throw new ApiError(400, "You cannot remove yourself. Use 'Leave Group' instead.");
     }
 
-   console.log(group);
-   
     group.participants = group.participants.filter(
-        p => p.userId.toString() !== memberIdToRemove
+        id => id.toString() !== memberIdToRemove
     );
 
     await group.save();
 
+    const populated = await Conversations.findById(group._id)
+        .populate("participants", "firstName lastName userName photo email");
+
     return res.status(200).json(
-        new ApiResoponse(200, group, "Member removed successfully")
+        new ApiResoponse(200, populated, "Member removed successfully")
     );
 });
 
-
+//  to delete the group (only admin is allowed, not used)
 export const deleteGroup = asyncHandler(async (req, res) => {
     const group = req.group; 
 
@@ -321,34 +212,42 @@ export const deleteGroup = asyncHandler(async (req, res) => {
     );
 });
 
-
+//  to exit/leave the group by the user (not used)
 export const leaveGroup = asyncHandler(async (req, res) => {
     const { groupId } = req.params;
-    const currentUserId = req.user._id;
+    const userId = req.user._id;
 
     const group = await Conversations.findById(groupId);
-    if (!group) throw new ApiError(404, "Group not found");
+    if (!group) {
+        throw new ApiError(404, "Group not found");
+    }
 
-    if (group.admin.toString() === currentUserId.toString()) {
-        const remainingMembers = group.participants.filter(
-            p => p.userId.toString() !== currentUserId.toString()
+    if (group.admin.toString() === userId.toString()) {
+
+        const remaining = group.participants.filter(
+            id => id.toString() !== userId.toString()
         );
 
-        if (remainingMembers.length === 0) {
+        if (remaining.length === 0) {
             await Conversations.findByIdAndDelete(groupId);
-            return res.status(200).json(new ApiResoponse(200, {}, "Group deleted (Last member left)"));
+            return res.status(200).json(
+                new ApiResoponse(200, {}, "Group deleted (Last member left)")
+            );
         }
 
-        group.admin = remainingMembers[0].userId;
+        group.admin = remaining[0];
     }
 
     group.participants = group.participants.filter(
-        p => p.userId.toString() !== currentUserId.toString()
+        id => id.toString() !== userId.toString()
     );
 
     await group.save();
 
+    const populated = await Conversations.findById(group._id)
+        .populate("participants", "firstName lastName userName photo email");
+
     return res.status(200).json(
-        new ApiResoponse(200, group, "You have left the group")
+        new ApiResoponse(200, populated, "You have left the group")
     );
 });

@@ -4,21 +4,9 @@ const conversationSchema = new mongoose.Schema(
   {
     participants: [
       {
-        _id:false,
-        userId: {
-          type: mongoose.Schema.Types.ObjectId,
-          ref: "User",
-          required: true,
-        },
-        photo: {
-          type: String, 
-          default: null,
-        },
-        name: {
-          type: String, 
-          default: null,
-          required:true
-        },
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        required: true
       },
     ],
     admin:{

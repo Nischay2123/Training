@@ -33,6 +33,17 @@
     transition: transform 0.1s;
 }
 
+.profile-btn{
+    border-radius: 100%;
+}
+.profile-image-btn{
+    height: 100%;
+    width: 100%;
+    border-radius: 100%;
+    border-style: none;
+    padding: 0;
+    background-size: contain;
+}
 .nav-btn:hover {
     transform: scale(1.05);
 }

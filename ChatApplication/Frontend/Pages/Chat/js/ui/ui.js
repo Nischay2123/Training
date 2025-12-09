@@ -6,11 +6,11 @@ export const profileContainer = document.querySelector(".column-profile");
 export const statusImage = document.querySelector(".status-image img");
 export const statusName = document.querySelector(".status-name");
 
-import { getLocalMessages } from "./db.js";
-import { currentUser } from "./main.js";
-import { openSearchModal } from "./seen.js";
+import { getLocalMessages } from "../data/db.js";
+import { currentUser } from "../app/main.js";
+import { openSearchModal } from "../features/seen.js";
 
-export function renderChatList(conversations, notifyMap, selectedChatId, currentUser) {
+export function renderChatList(conversations, notifyMap, selecteChatObj, currentUser) {
     const validIds = new Set();
 
     conversations.forEach(chat => {
@@ -18,7 +18,7 @@ export function renderChatList(conversations, notifyMap, selectedChatId, current
 
         const targetUser = getTargetUser(chat, currentUser);
         const unreadCount = notifyMap.get(chat._id) || 0;
-        const isActive = selectedChatId && chat._id === selectedChatId._id;
+        const isActive = selecteChatObj && chat._id === selecteChatObj._id;
 
         let previewText = "Start a conversation";
         if (chat.lastMessage && chat.lastMessage.text) {
@@ -86,6 +86,7 @@ export function renderChatList(conversations, notifyMap, selectedChatId, current
 }
 
 export function renderMessages(messages, currentUser,participants) {
+    
     messageContainer.innerHTML = ""; 
     
     if(!messages || messages.length === 0) {
@@ -114,6 +115,7 @@ if (messageContainer) {
 }
 
 export function appendMessageToUI(msg, currentUser, participants) {
+    
     const senderId =  msg.sender; 
     const isOutgoing = senderId === currentUser._id;
     

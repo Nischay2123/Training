@@ -17,6 +17,7 @@ const corsOptions = {
     ],
     methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true,
+    exposedHeaders: ["x-token-refreshed"]
 };
 
 const app = express();
@@ -39,6 +40,8 @@ app.use(morgan("tiny"))
 
 
 app.use("/api/v1", apiRoutes);
+
+
 
 app.get("/",(req,res)=>{
     res.send("Hello from the Server")
